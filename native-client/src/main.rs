@@ -123,6 +123,7 @@ impl eframe::App for App {
                 });
                 ScrollArea::vertical().show(ui, |ui| {
                     for message in self.messages.lock().unwrap().iter().rev() {
+                        ui.separator();
                         ui.label(RichText::new(message).size(self.font_size).strong());
                     }
                 });
