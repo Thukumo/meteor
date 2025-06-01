@@ -22,7 +22,7 @@ async fn socket_handler(socket: WebSocket, broadcaster: broadcast::Sender<Messag
     let (mut ws_sender, mut ws_receiver) = socket.split();
     // broadcasterから送信されたメッセージを受信し、WebSocketの送信先に送る
     let broadcaster_clone = broadcaster.clone();
-    tokio::spawn(async move {
+    let mut send_task = tokio::spawn(async move {
         let mut receiver = broadcaster_clone.subscribe();
         while let Ok(message) = receiver.recv().await {
             // 5秒で送信が完了しない場合、切断する
@@ -32,11 +32,26 @@ async fn socket_handler(socket: WebSocket, broadcaster: broadcast::Sender<Messag
         }
     });
     // クライアントからのメッセージ受信の処理
-    while let Some(message) = ws_receiver.next().await {
-        match message {
-            Ok(text_message @ Message::Text(_)) => { if broadcaster.send(text_message).is_err() { break } }
-            Ok(Message::Close(_)) | Err(_) => { break }
-            _ => {} // pingとかは自動で応答してくれるらしい
+    let mut recv_task = tokio::spawn(async move {
+        while let Some(message) = ws_receiver.next().await {
+            match message {
+                Ok(text_message @ Message::Text(_)) => {
+                    if broadcaster.send(text_message).is_err() {
+                        // すべてのreceiverが切断されている
+                        break
+                    }
+                }
+                Ok(Message::Close(_)) | Err(_) => { break }
+                _ => {} // pingとかは自動で応答してくれるらしい
+            }
+        }
+    });
+    tokio::select! {
+        _ = &mut send_task => {
+            recv_task.abort();
+        }
+        _ = &mut recv_task => {
+            send_task.abort();
         }
     }
 }
@@ -65,9 +80,8 @@ async fn main() {
                         senderにpingを送信すると、if ws_sender.send(message).await.is_err() {break;} が発火して、
                         有効でないwebsocket接続(及びreceiver)が、少なくとも次のloopまでにdropされるはず
                     */
-                    let _ = sender.send(Message::Ping(Vec::new().into()));
+                    let _ = sender.send(Message::Ping([].as_slice().into()));
                     if sender.receiver_count() == 0 {
-                        println!("Removing room: {}", room);
                         remove_rooms.push(room.clone());
                     }
                 }
