@@ -23,9 +23,8 @@ async fn socket_handler(socket: WebSocket, room_data: (broadcast::Sender<Message
     let (mut ws_sender, mut ws_receiver) = socket.split();
     // broadcasterから送信されたメッセージを受信し、WebSocketの送信先に送る
     let (broadcaster, history) = room_data;
-    let broadcaster_clone = broadcaster.clone();
+    let mut receiver = broadcaster.subscribe();
     let mut send_task = tokio::spawn(async move {
-        let mut receiver = broadcaster_clone.subscribe();
         while let Ok(message) = receiver.recv().await {
             // 5秒で送信が完了しない場合、切断する
             if timeout(std::time::Duration::from_secs(5), ws_sender.send(message)).await.is_err() {
