@@ -65,13 +65,13 @@ async fn history_handler(
     Path(room): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> axum::Json<Vec<String>> {
-    let map = state.room_map.read().await;
-    if let Some((_, history)) = map.get(&room) {
-        let history = history.read().await;
-        axum::Json(history.iter().cloned().collect())
-    } else {
-        axum::Json(Vec::<String>::new())
-    }
+    axum::Json(
+        if let Some((_, history)) = state.room_map.read().await.get(&room) {
+            history.read().await.iter().cloned().collect()
+        } else {
+            Vec::new()
+        }
+    )
 }
 
 struct AppState {
@@ -90,21 +90,11 @@ async fn main() {
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-                let mut remove_rooms = Vec::new();
                 let mut map_lock = app_state.room_map.write().await;
-                for (room_name, (sender, _)) in map_lock.iter() {
-                    /*
-                        pingを送信し、ルームの送信先が空であれば削除
-                        senderにpingを送信すると、死んでいるwebsocket接続(及びreceiver)が、少なくとも次のloopまでにdropされるはず
-                    */
+                map_lock.retain(|_, (sender, _)| {
                     let _ = sender.send(Message::Ping([].as_slice().into()));
-                    if sender.receiver_count() == 0 {
-                        remove_rooms.push(room_name.clone());
-                    }
-                }
-                for room in remove_rooms {
-                    map_lock.remove(&room);
-                }
+                    sender.receiver_count() != 0
+                });
             }
         });
     }
