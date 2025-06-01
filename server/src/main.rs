@@ -90,8 +90,7 @@ async fn main() {
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-                let mut map_lock = app_state.room_map.write().await;
-                map_lock.retain(|_, (sender, _)| {
+                app_state.room_map.write().await.retain(|_, (sender, _)| {
                     /*
                         pingを送信し、ルームの送信先が空であれば削除
                         senderにpingを送信すると、死んでいるwebsocket接続(及びreceiver)が、少なくとも次のloopまでにdropされるはず
