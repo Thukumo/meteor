@@ -93,8 +93,6 @@ async fn main() {
         )
         .with_state(app_state)
         .fallback_service(axum::routing::get(|| async { "404 Not Found" }));
-    let listener = tokio::net::TcpListener::bind(
-        &"0.0.0.0:3000".parse::<std::net::SocketAddr>().unwrap()
-    ).await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
