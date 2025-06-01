@@ -41,7 +41,7 @@ async fn socket_handler(socket: WebSocket, broadcaster: broadcast::Sender<Messag
 }
 
 struct AppState {
-    // ルーム名をキーとした、WebSocketの送信先のベクターを保持するマップ
+    // ルーム名をキーとした、broadcastのSenderを保持するマップ
     room_map: Arc<Mutex<HashMap<String, broadcast::Sender<Message>>>>,
 }
 
