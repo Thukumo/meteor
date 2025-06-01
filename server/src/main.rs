@@ -12,7 +12,7 @@ async fn ws_handler(
 ) -> Response {
     let (sender, _) = broadcast::channel(100);
     let room_data = state.room_map.write().await.entry(room)
-        .or_insert_with(|| (sender, Arc::new(RwLock::new(VecDeque::new()))))
+        .or_insert_with(|| (sender, Arc::new(RwLock::new(VecDeque::with_capacity(100)))))
         .clone();
     ws.on_upgrade(async |socket| {
         socket_handler(socket, room_data).await;
@@ -39,8 +39,8 @@ async fn socket_handler(socket: WebSocket, room_data: (broadcast::Sender<Message
                 Ok(text_message @ Message::Text(_)) => {
                     let _ = broadcaster.send(text_message.clone());
                     let mut history = history.write().await;
-                    // 履歴は100件まで保持する
-                    if history.len() == 100 {
+                    // 履歴がいっぱいなら古いものを削除する
+                    if history.len() == history.capacity() {
                         history.pop_front();
                     }
                     history.push_back(text_message.into_text().unwrap().to_string());
