@@ -38,10 +38,7 @@ async fn socket_handler(socket: WebSocket, room_data: (broadcast::Sender<Message
         while let Some(message) = ws_receiver.next().await {
             match message {
                 Ok(text_message @ Message::Text(_)) => {
-                    if broadcaster.send(text_message.clone()).is_err() {
-                        // すべてのreceiverが切断されている
-                        break
-                    }
+                    let _ = broadcaster.send(text_message.clone());
                     let mut history = history.write().await;
                     // 履歴は100件まで保持する
                     if history.len() == 100 {
@@ -99,8 +96,7 @@ async fn main() {
                 for (room_name, (sender, _)) in map_lock.iter() {
                     /*
                         pingを送信し、ルームの送信先が空であれば削除
-                        senderにpingを送信すると、if ws_sender.send(message).await.is_err() {break;} が発火して、
-                        有効でないwebsocket接続(及びreceiver)が、少なくとも次のloopまでにdropされるはず
+                        senderにpingを送信すると、死んでいるwebsocket接続(及びreceiver)が、少なくとも次のloopまでにdropされるはず
                     */
                     let _ = sender.send(Message::Ping([].as_slice().into()));
                     if sender.receiver_count() == 0 {
