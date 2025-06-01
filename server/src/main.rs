@@ -92,6 +92,10 @@ async fn main() {
                 tokio::time::sleep(std::time::Duration::from_secs(30)).await;
                 let mut map_lock = app_state.room_map.write().await;
                 map_lock.retain(|_, (sender, _)| {
+                    /*
+                        pingを送信し、ルームの送信先が空であれば削除
+                        senderにpingを送信すると、死んでいるwebsocket接続(及びreceiver)が、少なくとも次のloopまでにdropされるはず
+                    */
                     let _ = sender.send(Message::Ping([].as_slice().into()));
                     sender.receiver_count() != 0
                 });
