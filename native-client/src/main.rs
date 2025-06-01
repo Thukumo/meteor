@@ -53,6 +53,8 @@ impl App {
             let _ = terminator.send(());
         }
         let messages_clone = self.messages.clone();
+        // https://localhost:3000/{room_name}/api/v1/historyから、メッセージ履歴のjsonを取得する
+        let history = reqwest::get(format!("http://localhost:3000/{}/api/v1/history", self.url));
         let connection = connect_async(format!("ws://localhost:3000/{}/api/v1/ws", self.url));
         let sender = self.sender.clone();
         let (terminator, thread_abort) = oneshot::channel::<()>();
@@ -61,6 +63,11 @@ impl App {
             let runtime = tokio::runtime::Runtime::new().unwrap();
             let sender_clone = sender.clone();
             runtime.block_on(async move {
+                if let Ok(history) = history.await {
+                    if let Ok(json) = history.json::<Vec<String>>().await {
+                        *messages_clone.lock().unwrap() = json;
+                    }
+                }
                 tokio::select! {
                     _ = async {
                         let (socket, _) = connection.await.expect("Failed to connect");

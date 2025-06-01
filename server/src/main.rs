@@ -1,8 +1,8 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::{HashMap, VecDeque}, sync::Arc};
 
 use axum::{extract::{ws::{Message, WebSocket}, Path, State, WebSocketUpgrade}, response::Response, routing::get_service, Router};
 use futures_util::{SinkExt, StreamExt};
-use tokio::{sync::{broadcast, Mutex}, time::timeout};
+use tokio::{sync::{broadcast, RwLock}, time::timeout};
 use tower_http::services::ServeDir;
 
 async fn ws_handler(
@@ -10,17 +10,19 @@ async fn ws_handler(
     State(state): State<Arc<AppState>>,
     ws: WebSocketUpgrade,
 ) -> Response {
-    let sender = state.room_map.lock().await.entry(room)
-        .or_insert_with(|| broadcast::channel(100).0)
+    let (sender, _) = broadcast::channel(100);
+    let room_data = state.room_map.write().await.entry(room)
+        .or_insert_with(|| (sender, Arc::new(RwLock::new(VecDeque::new()))))
         .clone();
     ws.on_upgrade(async |socket| {
-        socket_handler(socket, sender).await;
+        socket_handler(socket, room_data).await;
     })
 }
 
-async fn socket_handler(socket: WebSocket, broadcaster: broadcast::Sender<Message>) {
+async fn socket_handler(socket: WebSocket, room_data: (broadcast::Sender<Message>, Arc<RwLock<VecDeque<String>>>) ) {
     let (mut ws_sender, mut ws_receiver) = socket.split();
     // broadcasterから送信されたメッセージを受信し、WebSocketの送信先に送る
+    let (broadcaster, history) = room_data;
     let broadcaster_clone = broadcaster.clone();
     let mut send_task = tokio::spawn(async move {
         let mut receiver = broadcaster_clone.subscribe();
@@ -36,14 +38,21 @@ async fn socket_handler(socket: WebSocket, broadcaster: broadcast::Sender<Messag
         while let Some(message) = ws_receiver.next().await {
             match message {
                 Ok(text_message @ Message::Text(_)) => {
-                    if broadcaster.send(text_message).is_err() {
+                    if broadcaster.send(text_message.clone()).is_err() {
                         // すべてのreceiverが切断されている
                         break
                     }
+                    let mut history = history.write().await;
+                    // 履歴は100件まで保持する
+                    if history.len() == 100 {
+                        history.pop_front();
+                    }
+                    history.push_back(text_message.into_text().unwrap().to_string());
                 }
                 Ok(Message::Close(_)) | Err(_) => { break }
                 _ => {} // pingとかは自動で応答してくれるらしい
             }
+            // tokio::time::sleep(std::time::Duration::from_millis(100)).await; // ここでレート制限的にsleepを入れてもいいかも
         }
     });
     tokio::select! {
@@ -56,15 +65,28 @@ async fn socket_handler(socket: WebSocket, broadcaster: broadcast::Sender<Messag
     }
 }
 
+async fn history_handler(
+    Path(room): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> axum::Json<Vec<String>> {
+    let map = state.room_map.read().await;
+    if let Some((_, history)) = map.get(&room) {
+        let history = history.read().await;
+        axum::Json(history.iter().cloned().collect())
+    } else {
+        axum::Json(Vec::<String>::new())
+    }
+}
+
 struct AppState {
-    // ルーム名をキーとした、broadcastのSenderを保持するマップ
-    room_map: Arc<Mutex<HashMap<String, broadcast::Sender<Message>>>>,
+    // 各ルームの状態を保持するマップ
+    room_map: Arc<RwLock<HashMap<String, (broadcast::Sender<Message>, Arc<RwLock<VecDeque<String>>>)>>>,
 }
 
 #[tokio::main]
 async fn main() {
     let app_state = Arc::new(AppState {
-        room_map: Arc::new(Mutex::new(HashMap::new())),
+        room_map: Arc::new(RwLock::new(HashMap::new())),
     });
     // 有効なクライアントの接続がないルームを定期的に削除するバックグラウンドタスク
     {
@@ -73,8 +95,8 @@ async fn main() {
             loop {
                 tokio::time::sleep(std::time::Duration::from_secs(30)).await;
                 let mut remove_rooms = Vec::new();
-                let mut map_lock = app_state.room_map.lock().await;
-                for (room, sender) in map_lock.iter() {
+                let mut map_lock = app_state.room_map.write().await;
+                for (room_name, (sender, _)) in map_lock.iter() {
                     /*
                         pingを送信し、ルームの送信先が空であれば削除
                         senderにpingを送信すると、if ws_sender.send(message).await.is_err() {break;} が発火して、
@@ -82,7 +104,7 @@ async fn main() {
                     */
                     let _ = sender.send(Message::Ping([].as_slice().into()));
                     if sender.receiver_count() == 0 {
-                        remove_rooms.push(room.clone());
+                        remove_rooms.push(room_name.clone());
                     }
                 }
                 for room in remove_rooms {
@@ -97,7 +119,7 @@ async fn main() {
             .nest("/api", Router::new()
                 .nest("/v1", Router::new()
                     .route("/ws", axum::routing::get(ws_handler))
-                    // .route("/comment", axum::routing::post(post_comment))
+                    .route("/history", axum::routing::get(history_handler))
                 )
             )
         )
