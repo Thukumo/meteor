@@ -34,10 +34,8 @@ async fn socket_handler(socket: WebSocket, broadcaster: broadcast::Sender<Messag
     // クライアントからのメッセージ受信の処理
     while let Some(message) = ws_receiver.next().await {
         match message {
-            Ok(message@ Message::Text(_)) => { if broadcaster.send(message).is_err() { break } }
-            Ok(Message::Binary(_)) => {}
-            Ok(Message::Close(_)) => { break }
-            Err(_) => { break }
+            Ok(text_message @ Message::Text(_)) => { if broadcaster.send(text_message).is_err() { break } }
+            Ok(Message::Close(_)) | Err(_) => { break }
             _ => {} // pingとかは自動で応答してくれるらしい
         }
     }
@@ -53,7 +51,6 @@ async fn main() {
     let app_state = Arc::new(AppState {
         room_map: Arc::new(Mutex::new(HashMap::new())),
     });
-
     // 有効なクライアントの接続がないルームを定期的に削除するバックグラウンドタスク
     {
         let app_state = Arc::clone(&app_state);
@@ -66,10 +63,9 @@ async fn main() {
                     /*
                         pingを送信し、ルームの送信先が空であれば削除
                         senderにpingを送信すると、if ws_sender.send(message).await.is_err() {break;} が発火して、
-                        有効でないwebsocket接続(及びreceiver)がdropされるはず
+                        有効でないwebsocket接続(及びreceiver)が、少なくとも次のloopまでにdropされるはず
                     */
                     let _ = sender.send(Message::Ping(Vec::new().into()));
-                    //tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                     if sender.receiver_count() == 0 {
                         println!("Removing room: {}", room);
                         remove_rooms.push(room.clone());
