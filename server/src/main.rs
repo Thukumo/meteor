@@ -1,8 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
-use axum::{extract::{ws::{Message, WebSocket}, Path, State, WebSocketUpgrade}, response::Response, Router};
+use axum::{extract::{ws::{Message, WebSocket}, Path, State, WebSocketUpgrade}, response::Response, routing::get_service, Router};
 use futures_util::{SinkExt, StreamExt};
 use tokio::{sync::{broadcast, Mutex}, time::timeout};
+use tower_http::services::ServeDir;
 
 async fn ws_handler(
     Path(room): Path<String>,
@@ -16,6 +17,7 @@ async fn ws_handler(
         socket_handler(socket, sender).await;
     })
 }
+
 async fn socket_handler(socket: WebSocket, broadcaster: broadcast::Sender<Message>) {
     let (mut ws_sender, mut ws_receiver) = socket.split();
     // broadcasterから送信されたメッセージを受信し、WebSocketの送信先に送る
@@ -80,6 +82,7 @@ async fn main() {
         });
     }
     let app = Router::new()
+        .route_service("/{path}", get_service(ServeDir::new("static")))
         .nest("/{room}", Router::new()
             .nest("/api", Router::new()
                 .nest("/v1", Router::new()
