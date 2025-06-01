@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use axum::{extract::{ws::{Message, WebSocket}, Path, State, WebSocketUpgrade}, response::Response, Router};
 use futures_util::{SinkExt, StreamExt};
-use tokio::sync::{Mutex, broadcast};
+use tokio::{sync::{broadcast, Mutex}, time::timeout};
 
 async fn ws_handler(
     Path(room): Path<String>,
@@ -23,7 +23,8 @@ async fn socket_handler(socket: WebSocket, broadcaster: broadcast::Sender<Messag
     tokio::spawn(async move {
         let mut receiver = broadcaster_clone.subscribe();
         while let Ok(message) = receiver.recv().await {
-            if ws_sender.send(message).await.is_err() {
+            // 5秒で送信が完了しない場合、切断する
+            if timeout(std::time::Duration::from_secs(5), ws_sender.send(message)).await.is_err() {
                 break;
             }
         }
