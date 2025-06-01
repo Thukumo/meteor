@@ -85,22 +85,20 @@ async fn main() {
         room_map: Arc::new(RwLock::new(HashMap::new())),
     });
     // 有効なクライアントの接続がないルームを定期的に削除するバックグラウンドタスク
-    {
-        let app_state = Arc::clone(&app_state);
-        tokio::spawn(async move {
-            loop {
-                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-                app_state.room_map.write().await.retain(|_, (sender, _)| {
-                    /*
-                        pingを送信し、ルームの送信先が空であれば削除
-                        senderにpingを送信すると、死んでいるwebsocket接続(及びreceiver)が、少なくとも次のloopまでにdropされるはず
-                    */
-                    let _ = sender.send(Message::Ping([].as_slice().into()));
-                    sender.receiver_count() != 0
-                });
-            }
-        });
-    }
+    let app_state_clone = Arc::clone(&app_state);
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            app_state_clone.room_map.write().await.retain(|_, (sender, _)| {
+                /*
+                    pingを送信し、ルームの送信先が空であれば削除
+                    senderにpingを送信すると、死んでいるwebsocket接続(及びreceiver)が、少なくとも次のloopまでにdropされるはず
+                */
+                let _ = sender.send(Message::Ping([].as_slice().into()));
+                sender.receiver_count() != 0
+            });
+        }
+    });
     let app = Router::new()
         .route_service("/{path}", get_service(ServeDir::new("static")))
         .nest("/{room}", Router::new()
