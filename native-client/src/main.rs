@@ -4,7 +4,7 @@ use std::{sync::{Arc, Mutex}, thread};
 
 use eframe::egui::{Frame, RichText, ScrollArea, Slider};
 use futures_util::{stream::SplitSink, SinkExt, StreamExt};
-use tokio::net::TcpStream;
+use tokio::{net::TcpStream, sync::oneshot};
 use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
 
 fn main() -> eframe::Result<()> {
@@ -28,6 +28,7 @@ struct App {
     messages: Arc<Mutex<Vec<String>>>,
     url: String,
     thread_handle: Arc<Mutex<Option<std::thread::JoinHandle<()>>>>,
+    thread_abort: Option<oneshot::Sender<()>>,
     sender: Arc<Mutex<Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>>,
     runtime_for_sender: tokio::runtime::Runtime,
     comment: String,
@@ -40,6 +41,7 @@ impl App {
             messages: Arc::new(Mutex::new(Vec::new())),
             url: String::new(),
             thread_handle: Arc::new(Mutex::new(None)),
+            thread_abort: None,
             sender: Arc::new(Mutex::new(None)),
             runtime_for_sender: tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime"),
             comment: String::new(),
@@ -47,28 +49,39 @@ impl App {
         }
     }
     fn connect(&mut self) {
+        if let Some(terminator) = self.thread_abort.take() {
+            let _ = terminator.send(());
+        }
         let messages_clone = self.messages.clone();
         let connection = connect_async(format!("ws://localhost:3000/{}/api/v1/ws", self.url));
         let sender = self.sender.clone();
+        let (terminator, thread_abort) = oneshot::channel::<()>();
+        self.thread_abort = Some(terminator);
         *self.thread_handle.lock().unwrap() = Some(std::thread::spawn(move || {
             let runtime = tokio::runtime::Runtime::new().unwrap();
+            let sender_clone = sender.clone();
             runtime.block_on(async move {
-            let (socket, _) = connection.await.expect("Failed to connect");
-            let (write, mut read) = socket.split();
-            *sender.lock().unwrap() = Some(write);
-            loop {
-                match read.next().await {
-                    Some(Ok(Message::Text(text))) => {
-                        let mut messages = messages_clone.lock().unwrap();
-                        messages.push(text.to_string());
+                tokio::select! {
+                    _ = async {
+                        let (socket, _) = connection.await.expect("Failed to connect");
+                        let (write, mut read) = socket.split();
+                        *sender.lock().unwrap() = Some(write);
+                        loop {
+                            match read.next().await {
+                                Some(Ok(Message::Text(text))) => {
+                                    let mut messages = messages_clone.lock().unwrap();
+                                    messages.push(text.to_string());
+                                }
+                                Some(Ok(Message::Close(_))) | Some(Err(_)) => break,
+                                _ => {} // tokio-tungsteniteもpingに自動で応答するらしい
+                            }
+                        }
+                    } => {},
+                    _ = thread_abort => {
                     }
-                    Some(Ok(Message::Close(_))) => break,
-                    Some(Err(_)) => break,
-                    _ => {} // tokio-tungsteniteもpingに自動で応答するらしい
                 }
-            }
-            *sender.lock().unwrap() = None;
             });
+            *sender_clone.lock().unwrap() = None;
         }));
     }
     fn send_message(&mut self, message: String) {
