@@ -7,7 +7,6 @@ use tower_http::services::ServeDir;
 
 const RATE_LIMIT: std::time::Duration = std::time::Duration::ZERO;
 const WEBSOCKET_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
-const GC_DURATION: std::time::Duration = std::time::Duration::from_secs(20);
 const MAX_HISTORY_SIZE: usize = 100;
 const SERVICE_PORT: u16 = 3000;
 
@@ -16,21 +15,27 @@ async fn ws_handler(
     State(state): State<Arc<AppState>>,
     ws: WebSocketUpgrade,
 ) -> Response {
-    let room_data = state.room_map.write().await.entry(room)
+    let room_data = state.room_map.write().await.entry(room.clone())
         .or_insert_with(|| RoomState::new(MAX_HISTORY_SIZE))
         .clone();
-    ws.on_upgrade(async |socket| {
+    ws.on_upgrade(async move |socket| {
         socket_handler(socket, room_data).await;
+        let mut room_map = state.room_map.write().await;
+        // ルームに誰もいなくなったら削除する
+        if *room_map.get(&room).unwrap().connection.read().await == 0 {
+            room_map.remove(&room);
+        }
     })
 }
 
 async fn socket_handler(socket: WebSocket, room_data: RoomState) {
+    *room_data.connection.write().await += 1;
     let (mut ws_sender, mut ws_receiver) = socket.split();
     // broadcasterから送信されたメッセージを受信し、WebSocketの送信先に送る
     let mut receiver = room_data.broadcaster.subscribe();
     let mut send_task = tokio::spawn(async move {
         while let Ok(message) = receiver.recv().await {
-            // 5秒で送信が完了しない場合、切断する
+            // 設定した時間内にメッセージを送信できなかった場合、終了する
             if timeout(WEBSOCKET_TIMEOUT, ws_sender.send(message)).await.is_err() {
                 break;
             }
@@ -63,6 +68,7 @@ async fn socket_handler(socket: WebSocket, room_data: RoomState) {
             send_task.abort();
         }
     }
+    *room_data.connection.write().await -= 1;
 }
 
 async fn history_handler(
@@ -87,11 +93,12 @@ async fn room_list_handler(
 ) -> axum::Json<Vec<RoomInfo>> {
     axum::Json(
         {
-            let mut vec = Vec::with_capacity(state.room_map.read().await.len());
-            for (name, room_data) in state.room_map.read().await.iter() {
+            let map = state.room_map.read().await;
+            let mut vec = Vec::with_capacity(map.len());
+            for (name, room_data) in map.iter() {
                 vec.push(RoomInfo {
                     name: name.clone(),
-                    connection: room_data.broadcaster.receiver_count(),
+                    connection: *room_data.connection.read().await,
                 });
             }
             vec
@@ -105,12 +112,14 @@ struct AppState {
 }
 #[derive(Clone)]
 struct RoomState {
+    connection: Arc<RwLock<usize>>,
     broadcaster: broadcast::Sender<Message>,
     history: Arc<RwLock<VecDeque<String>>>,
 }
 impl RoomState {
     fn new(capacity: usize) -> Self {
         Self {
+            connection: Arc::new(RwLock::new(0)),
             broadcaster: broadcast::channel(capacity).0,
             history: Arc::new(RwLock::new(VecDeque::with_capacity(capacity))),
         }
@@ -121,22 +130,6 @@ impl RoomState {
 async fn main() {
     let app_state = Arc::new(AppState {
         room_map: Arc::new(RwLock::new(HashMap::new())),
-    });
-    // 有効なクライアントの接続がないルームを定期的に削除するバックグラウンドタスク
-    let app_state_clone = Arc::clone(&app_state);
-    tokio::spawn(async move {
-        loop {
-
-            tokio::time::sleep(GC_DURATION).await;
-            app_state_clone.room_map.write().await.retain(|_, room_data| {
-                /*
-                    pingを送信し、ルームの送信先が空であれば削除
-                    senderにpingを送信すると、死んでいるwebsocket接続(及びreceiver)が、少なくとも次のloopまでにdropされるはず
-                */
-                let _ = room_data.broadcaster.send(Message::Ping([].as_slice().into()));
-                room_data.broadcaster.receiver_count() != 0
-            });
-        }
     });
     let app_state_clone = app_state.clone();
     let app = Router::new()
@@ -169,9 +162,10 @@ async fn main() {
                         break;
                     }
                     "room" | "rooms" => {
-                        println!("{} active rooms:", app_state_clone.room_map.read().await.len());
-                        for (name, room_data) in app_state_clone.room_map.read().await.iter() {
-                            println!("Room: {}, Connections: {}", name, room_data.broadcaster.receiver_count());
+                        let map = app_state_clone.room_map.read().await;
+                        println!("{} active rooms:", map.len());
+                        for (name, room_data) in map.iter() {
+                            println!("Room: {}, Connections: {}", name, *room_data.connection.read().await);
                         }
                     }
                     _ => {}
