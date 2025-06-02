@@ -26,9 +26,10 @@ async fn ws_handler(
         if let Some(room_state) = room_map.get_mut(&room) {
             let check = room_state.destroyer.lock().await.is_none();
             if *room_state.connection.read().await == 0 && check {
-                let mut map = state.room_map.read().await.clone();
+                let room_map = state.room_map.clone();
                 *room_state.destroyer.lock().await = Some(tokio::spawn(async move {
                     tokio::time::sleep(REMOVE_AFTER).await;
+                    let mut map = room_map.write().await;
                     map.remove(&room);
                 }));
             }
@@ -41,7 +42,8 @@ async fn socket_handler(socket: WebSocket, room_data: RoomState) {
     if let Some(destroyer) = room_data.destroyer.lock().await.take() {
         destroyer.abort();
     }
-    *room_data.connection.write().await += 1;
+    let connection = room_data.connection.clone();
+    *connection.write().await += 1;
     let (mut ws_sender, mut ws_receiver) = socket.split();
     // broadcasterから送信されたメッセージを受信し、WebSocketの送信先に送る
     let mut receiver = room_data.broadcaster.subscribe();
@@ -80,7 +82,7 @@ async fn socket_handler(socket: WebSocket, room_data: RoomState) {
             send_task.abort();
         }
     }
-    *room_data.connection.write().await -= 1;
+    *connection.write().await -= 1;
 }
 
 async fn history_handler(
@@ -147,7 +149,7 @@ async fn main() {
     });
     let app_state_clone = app_state.clone();
     let app = Router::new()
-        .route_service("/{path}", get_service(ServeDir::new("static")))
+        .route_service("/", get_service(ServeDir::new("static")))
         .nest("/api", Router::new()
             .nest("/v1", Router::new()
                 .nest("/room/{room}", Router::new()
