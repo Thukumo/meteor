@@ -74,6 +74,14 @@ async fn history_handler(
     )
 }
 
+async fn room_list_handler(
+    State(state): State<Arc<AppState>>,
+) -> axum::Json<Vec<String>> {
+    axum::Json(
+        state.room_map.read().await.keys().cloned().collect()
+    )
+}
+
 struct AppState {
     // 各ルームの状態を保持するマップ
     room_map: Arc<RwLock<HashMap<String, (broadcast::Sender<Message>, Arc<RwLock<VecDeque<String>>>)>>>,
@@ -101,12 +109,13 @@ async fn main() {
     });
     let app = Router::new()
         .route_service("/{path}", get_service(ServeDir::new("static")))
-        .nest("/{room}", Router::new()
-            .nest("/api", Router::new()
-                .nest("/v1", Router::new()
+        .nest("/api", Router::new()
+            .nest("/v1", Router::new()
+                .nest("/room/{room}", Router::new()
                     .route("/ws", axum::routing::get(ws_handler))
                     .route("/history", axum::routing::get(history_handler))
                 )
+                .route("/room_list", axum::routing::get(room_list_handler))
             )
         )
         .with_state(app_state)
