@@ -1,9 +1,15 @@
-use std::{collections::{HashMap, VecDeque}, io::Write, sync::Arc};
+use std::{collections::{HashMap, VecDeque}, io::Write, net::SocketAddr, sync::Arc};
 
 use axum::{extract::{ws::{Message, WebSocket}, Path, State, WebSocketUpgrade}, response::Response, routing::get_service, Router};
 use futures_util::{SinkExt, StreamExt};
 use tokio::{sync::{broadcast, RwLock}, time::timeout};
 use tower_http::services::ServeDir;
+
+const RATE_LIMIT: std::time::Duration = std::time::Duration::ZERO;
+const WEBSOCKET_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+const GC_DURATION: std::time::Duration = std::time::Duration::from_secs(20);
+const MAX_HISTORY_SIZE: usize = 100;
+const SERVICE_PORT: u16 = 3000;
 
 async fn ws_handler(
     Path(room): Path<String>,
@@ -11,7 +17,7 @@ async fn ws_handler(
     ws: WebSocketUpgrade,
 ) -> Response {
     let room_data = state.room_map.write().await.entry(room)
-        .or_insert_with(|| RoomState::new(100))
+        .or_insert_with(|| RoomState::new(MAX_HISTORY_SIZE))
         .clone();
     ws.on_upgrade(async |socket| {
         socket_handler(socket, room_data).await;
@@ -25,7 +31,7 @@ async fn socket_handler(socket: WebSocket, room_data: RoomState) {
     let mut send_task = tokio::spawn(async move {
         while let Ok(message) = receiver.recv().await {
             // 5秒で送信が完了しない場合、切断する
-            if timeout(std::time::Duration::from_secs(5), ws_sender.send(message)).await.is_err() {
+            if timeout(WEBSOCKET_TIMEOUT, ws_sender.send(message)).await.is_err() {
                 break;
             }
         }
@@ -46,7 +52,7 @@ async fn socket_handler(socket: WebSocket, room_data: RoomState) {
                 Ok(Message::Close(_)) | Err(_) => { break }
                 _ => {} // pingとかは自動で応答してくれるらしい
             }
-            // tokio::time::sleep(std::time::Duration::from_millis(100)).await; // ここでレート制限的にsleepを入れてもいいかも
+            tokio::time::sleep(RATE_LIMIT).await;
         }
     });
     tokio::select! {
@@ -121,7 +127,7 @@ async fn main() {
     tokio::spawn(async move {
         loop {
 
-            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            tokio::time::sleep(GC_DURATION).await;
             app_state_clone.room_map.write().await.retain(|_, room_data| {
                 /*
                     pingを送信し、ルームの送信先が空であれば削除
@@ -146,7 +152,7 @@ async fn main() {
         )
         .with_state(app_state)
         .fallback_service(axum::routing::get(|| async { "404 Not Found" }));
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], SERVICE_PORT))).await.unwrap();
     axum::serve(listener, app).with_graceful_shutdown(async move {
         let mut buf = String::new();
         loop {
@@ -162,7 +168,7 @@ async fn main() {
                         println!("Shutting down server...");
                         break;
                     }
-                    "rooms" => {
+                    "room" | "rooms" => {
                         println!("{} active rooms:", app_state_clone.room_map.read().await.len());
                         for (name, room_data) in app_state_clone.room_map.read().await.iter() {
                             println!("Room: {}, Connections: {}", name, room_data.broadcaster.receiver_count());
