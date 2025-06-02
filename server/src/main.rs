@@ -2,11 +2,12 @@ use std::{collections::{HashMap, VecDeque}, io::Write, net::SocketAddr, sync::Ar
 
 use axum::{extract::{ws::{Message, WebSocket}, Path, State, WebSocketUpgrade}, response::Response, routing::get_service, Router};
 use futures_util::{SinkExt, StreamExt};
-use tokio::{sync::{broadcast, RwLock}, time::timeout};
+use tokio::{sync::{broadcast, Mutex, RwLock}, time::timeout};
 use tower_http::services::ServeDir;
 
 const RATE_LIMIT: std::time::Duration = std::time::Duration::ZERO;
 const WEBSOCKET_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+const REMOVE_AFTER: std::time::Duration = std::time::Duration::from_secs(60);
 const MAX_HISTORY_SIZE: usize = 100;
 const SERVICE_PORT: u16 = 3000;
 
@@ -21,14 +22,25 @@ async fn ws_handler(
     ws.on_upgrade(async move |socket| {
         socket_handler(socket, room_data).await;
         let mut room_map = state.room_map.write().await;
-        // ルームに誰もいなくなったら削除する
-        if *room_map.get(&room).unwrap().connection.read().await == 0 {
-            room_map.remove(&room);
+        // ルームの接続数が0になったら、ルーム削除のカウントダウンを始める
+        if let Some(room_state) = room_map.get_mut(&room) {
+            let check = room_state.destroyer.lock().await.is_none();
+            if *room_state.connection.read().await == 0 && check {
+                let mut map = state.room_map.read().await.clone();
+                *room_state.destroyer.lock().await = Some(tokio::spawn(async move {
+                    tokio::time::sleep(REMOVE_AFTER).await;
+                    map.remove(&room);
+                }));
+            }
         }
     })
 }
 
 async fn socket_handler(socket: WebSocket, room_data: RoomState) {
+    // 削除予定があればキャンセルする
+    if let Some(destroyer) = room_data.destroyer.lock().await.take() {
+        destroyer.abort();
+    }
     *room_data.connection.write().await += 1;
     let (mut ws_sender, mut ws_receiver) = socket.split();
     // broadcasterから送信されたメッセージを受信し、WebSocketの送信先に送る
@@ -115,6 +127,7 @@ struct RoomState {
     connection: Arc<RwLock<usize>>,
     broadcaster: broadcast::Sender<Message>,
     history: Arc<RwLock<VecDeque<String>>>,
+    destroyer: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
 }
 impl RoomState {
     fn new(capacity: usize) -> Self {
@@ -122,6 +135,7 @@ impl RoomState {
             connection: Arc::new(RwLock::new(0)),
             broadcaster: broadcast::channel(capacity).0,
             history: Arc::new(RwLock::new(VecDeque::with_capacity(capacity))),
+            destroyer: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -150,7 +164,7 @@ async fn main() {
         let mut buf = String::new();
         loop {
             print!("> ");
-            std::io::stdout().flush().unwrap();
+            let _ = std::io::stdout().flush();
             if std::io::stdin().read_line(&mut buf).is_err() {
                 continue;
             }
