@@ -10,20 +10,18 @@ async fn ws_handler(
     State(state): State<Arc<AppState>>,
     ws: WebSocketUpgrade,
 ) -> Response {
-    let (sender, _) = broadcast::channel(100);
     let room_data = state.room_map.write().await.entry(room)
-        .or_insert_with(|| (sender, Arc::new(RwLock::new(VecDeque::with_capacity(100)))))
+        .or_insert_with(|| RoomState::new(100))
         .clone();
     ws.on_upgrade(async |socket| {
         socket_handler(socket, room_data).await;
     })
 }
 
-async fn socket_handler(socket: WebSocket, room_data: (broadcast::Sender<Message>, Arc<RwLock<VecDeque<String>>>) ) {
+async fn socket_handler(socket: WebSocket, room_data: RoomState) {
     let (mut ws_sender, mut ws_receiver) = socket.split();
     // broadcasterから送信されたメッセージを受信し、WebSocketの送信先に送る
-    let (broadcaster, history) = room_data;
-    let mut receiver = broadcaster.subscribe();
+    let mut receiver = room_data.broadcaster.subscribe();
     let mut send_task = tokio::spawn(async move {
         while let Ok(message) = receiver.recv().await {
             // 5秒で送信が完了しない場合、切断する
@@ -37,8 +35,8 @@ async fn socket_handler(socket: WebSocket, room_data: (broadcast::Sender<Message
         while let Some(message) = ws_receiver.next().await {
             match message {
                 Ok(text_message @ Message::Text(_)) => {
-                    let _ = broadcaster.send(text_message.clone());
-                    let mut history = history.write().await;
+                    let _ = room_data.broadcaster.send(text_message.clone());
+                    let mut history = room_data.history.write().await;
                     // 履歴がいっぱいなら古いものを削除する
                     if history.len() == history.capacity() {
                         history.pop_front();
@@ -66,8 +64,8 @@ async fn history_handler(
     State(state): State<Arc<AppState>>,
 ) -> axum::Json<Vec<String>> {
     axum::Json(
-        if let Some((_, history)) = state.room_map.read().await.get(&room) {
-            history.read().await.iter().cloned().collect()
+        if let Some(room_data) = state.room_map.read().await.get(&room) {
+            room_data.history.read().await.iter().cloned().collect()
         } else {
             Vec::new()
         }
@@ -84,7 +82,20 @@ async fn room_list_handler(
 
 struct AppState {
     // 各ルームの状態を保持するマップ
-    room_map: Arc<RwLock<HashMap<String, (broadcast::Sender<Message>, Arc<RwLock<VecDeque<String>>>)>>>,
+    room_map: Arc<RwLock<HashMap<String, RoomState>>>,
+}
+#[derive(Clone)]
+struct RoomState {
+    broadcaster: broadcast::Sender<Message>,
+    history: Arc<RwLock<VecDeque<String>>>,
+}
+impl RoomState {
+    fn new(capacity: usize) -> Self {
+        Self {
+            broadcaster: broadcast::channel(capacity).0,
+            history: Arc::new(RwLock::new(VecDeque::with_capacity(capacity))),
+        }
+    }
 }
 
 #[tokio::main]
@@ -97,13 +108,13 @@ async fn main() {
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-            app_state_clone.room_map.write().await.retain(|_, (sender, _)| {
+            app_state_clone.room_map.write().await.retain(|_, room_data| {
                 /*
                     pingを送信し、ルームの送信先が空であれば削除
                     senderにpingを送信すると、死んでいるwebsocket接続(及びreceiver)が、少なくとも次のloopまでにdropされるはず
                 */
-                let _ = sender.send(Message::Ping([].as_slice().into()));
-                sender.receiver_count() != 0
+                let _ = room_data.broadcaster.send(Message::Ping([].as_slice().into()));
+                room_data.broadcaster.receiver_count() != 0
             });
         }
     });
