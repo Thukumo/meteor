@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, VecDeque}, sync::Arc};
+use std::{collections::{HashMap, VecDeque}, io::Write, sync::Arc};
 
 use axum::{extract::{ws::{Message, WebSocket}, Path, State, WebSocketUpgrade}, response::Response, routing::get_service, Router};
 use futures_util::{SinkExt, StreamExt};
@@ -71,12 +71,25 @@ async fn history_handler(
         }
     )
 }
-
+#[derive(serde::Serialize, serde::Deserialize)]
+struct RoomInfo {
+    name: String,
+    connection: usize,
+}
 async fn room_list_handler(
     State(state): State<Arc<AppState>>,
-) -> axum::Json<Vec<String>> {
+) -> axum::Json<Vec<RoomInfo>> {
     axum::Json(
-        state.room_map.read().await.keys().cloned().collect()
+        {
+            let mut vec = Vec::with_capacity(state.room_map.read().await.len());
+            for (name, room_data) in state.room_map.read().await.iter() {
+                vec.push(RoomInfo {
+                    name: name.clone(),
+                    connection: room_data.broadcaster.receiver_count(),
+                });
+            }
+            vec
+        }
     )
 }
 
@@ -107,6 +120,7 @@ async fn main() {
     let app_state_clone = Arc::clone(&app_state);
     tokio::spawn(async move {
         loop {
+
             tokio::time::sleep(std::time::Duration::from_secs(30)).await;
             app_state_clone.room_map.write().await.retain(|_, room_data| {
                 /*
@@ -118,6 +132,7 @@ async fn main() {
             });
         }
     });
+    let app_state_clone = app_state.clone();
     let app = Router::new()
         .route_service("/{path}", get_service(ServeDir::new("static")))
         .nest("/api", Router::new()
@@ -132,5 +147,31 @@ async fn main() {
         .with_state(app_state)
         .fallback_service(axum::routing::get(|| async { "404 Not Found" }));
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app).with_graceful_shutdown(async move {
+        let mut buf = String::new();
+        loop {
+            print!("> ");
+            std::io::stdout().flush().unwrap();
+            if std::io::stdin().read_line(&mut buf).is_err() {
+                continue;
+            }
+            let input = buf.trim().split_ascii_whitespace().collect::<Vec<_>>();
+            if let Some(command) = input.get(0) {
+                match *command {
+                    "exit" | "quit" | "stop" => {
+                        println!("Shutting down server...");
+                        break;
+                    }
+                    "rooms" => {
+                        println!("{} active rooms:", app_state_clone.room_map.read().await.len());
+                        for (name, room_data) in app_state_clone.room_map.read().await.iter() {
+                            println!("Room: {}, Connections: {}", name, room_data.broadcaster.receiver_count());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            buf.clear();
+        }
+    }).await.unwrap();
 }
