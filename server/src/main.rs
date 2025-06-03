@@ -7,7 +7,7 @@ use tower_http::services::ServeDir;
 
 const RATE_LIMIT: std::time::Duration = std::time::Duration::ZERO;
 const WEBSOCKET_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
-const REMOVE_AFTER: std::time::Duration = std::time::Duration::from_secs(10);
+const REMOVE_AFTER: std::time::Duration = std::time::Duration::from_secs(60);
 const MAX_HISTORY_SIZE: usize = 100;
 const SERVICE_PORT: u16 = 3000;
 
@@ -92,28 +92,15 @@ async fn socket_handler(socket: WebSocket, room_data: RoomState) {
     *connection.write().await -= 1;
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
-struct RoomHistoryAndConnection {
-    history: VecDeque<String>,
-    connection: usize,
-}
 async fn history_handler(
     Path(room): Path<String>,
     State(state): State<Arc<AppState>>,
-) -> axum::Json<RoomHistoryAndConnection> {
+) -> axum::Json<VecDeque<String>> {
     axum::Json(
-        {
-            if let Some(room_data) = state.room_map.read().await.get(&room) {
-                RoomHistoryAndConnection {
-                    history: room_data.history.read().await.clone(),
-                    connection: *room_data.connection.read().await,
-                }
-            } else {
-                RoomHistoryAndConnection {
-                    history: VecDeque::new(),
-                    connection: 0,
-                }
-            }
+        if let Some(room_data) = state.room_map.read().await.get(&room) {
+            room_data.history.read().await.clone()
+        } else {
+            VecDeque::new()
         }
     )
 }
@@ -122,6 +109,7 @@ struct RoomInfo {
     name: String,
     connection: usize,
 }
+#[allow(dead_code)]
 async fn room_list_handler(
     State(state): State<Arc<AppState>>,
 ) -> axum::Json<Vec<RoomInfo>> {
