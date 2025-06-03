@@ -7,7 +7,7 @@ use tower_http::services::ServeDir;
 
 const RATE_LIMIT: std::time::Duration = std::time::Duration::ZERO;
 const WEBSOCKET_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
-const REMOVE_AFTER: std::time::Duration = std::time::Duration::from_secs(60);
+const REMOVE_AFTER: std::time::Duration = std::time::Duration::from_secs(10);
 const MAX_HISTORY_SIZE: usize = 100;
 const SERVICE_PORT: u16 = 3000;
 
@@ -23,8 +23,9 @@ async fn ws_handler(
                 let _ = destroyer.send(());
             }
         }
-        socket_handler(socket, state.room_map.write().await.entry(room.clone())
-            .or_insert_with(|| RoomState::new(MAX_HISTORY_SIZE)).clone()).await;
+        let room_state = state.room_map.write().await.entry(room.clone())
+            .or_insert_with(|| RoomState::new(MAX_HISTORY_SIZE)).clone();
+        socket_handler(socket, room_state).await;
         let mut room_map = state.room_map.write().await;
         // ルームの接続数が0になったら、ルーム削除のカウントダウンを始める
         if let Some(room_state) = room_map.get_mut(&room) {
@@ -91,15 +92,28 @@ async fn socket_handler(socket: WebSocket, room_data: RoomState) {
     *connection.write().await -= 1;
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+struct RoomHistoryAndConnection {
+    history: VecDeque<String>,
+    connection: usize,
+}
 async fn history_handler(
     Path(room): Path<String>,
     State(state): State<Arc<AppState>>,
-) -> axum::Json<Vec<String>> {
+) -> axum::Json<RoomHistoryAndConnection> {
     axum::Json(
-        if let Some(room_data) = state.room_map.read().await.get(&room) {
-            room_data.history.read().await.iter().cloned().collect()
-        } else {
-            Vec::new()
+        {
+            if let Some(room_data) = state.room_map.read().await.get(&room) {
+                RoomHistoryAndConnection {
+                    history: room_data.history.read().await.clone(),
+                    connection: *room_data.connection.read().await,
+                }
+            } else {
+                RoomHistoryAndConnection {
+                    history: VecDeque::new(),
+                    connection: 0,
+                }
+            }
         }
     )
 }
@@ -162,7 +176,7 @@ async fn main() {
                     .route("/ws", axum::routing::get(ws_handler))
                     .route("/history", axum::routing::get(history_handler))
                 )
-                .route("/room_list", axum::routing::get(room_list_handler))
+                // .route("/room_list", axum::routing::get(room_list_handler))
             )
         )
         .with_state(app_state)
