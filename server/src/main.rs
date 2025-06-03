@@ -22,11 +22,9 @@ async fn ws_handler(
             let _ = destroyer.send(());
         }
     }
-    let room_data = state.room_map.write().await.entry(room.clone())
-        .or_insert_with(|| RoomState::new(MAX_HISTORY_SIZE))
-        .clone();
     ws.on_upgrade(async move |socket| {
-        socket_handler(socket, room_data).await;
+        socket_handler(socket, state.room_map.write().await.entry(room.clone())
+            .or_insert_with(|| RoomState::new(MAX_HISTORY_SIZE)).clone()).await;
         let mut room_map = state.room_map.write().await;
         // ルームの接続数が0になったら、ルーム削除のカウントダウンを始める
         if let Some(room_state) = room_map.get_mut(&room) {
