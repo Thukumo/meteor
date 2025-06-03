@@ -16,13 +16,13 @@ async fn ws_handler(
     State(state): State<Arc<AppState>>,
     ws: WebSocketUpgrade,
 ) -> Response {
-    // 削除予定があればキャンセルする
-    if let Some(room_state) = state.room_map.read().await.get(&room) {
-        if let Some(destroyer) = room_state.destroyer.lock().await.take() {
-            let _ = destroyer.send(());
-        }
-    }
     ws.on_upgrade(async move |socket| {
+        // 削除予定があればキャンセルする
+        if let Some(room_state) = state.room_map.read().await.get(&room) {
+            if let Some(destroyer) = room_state.destroyer.lock().await.take() {
+                let _ = destroyer.send(());
+            }
+        }
         socket_handler(socket, state.room_map.write().await.entry(room.clone())
             .or_insert_with(|| RoomState::new(MAX_HISTORY_SIZE)).clone()).await;
         let mut room_map = state.room_map.write().await;
