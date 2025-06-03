@@ -16,6 +16,12 @@ async fn ws_handler(
     State(state): State<Arc<AppState>>,
     ws: WebSocketUpgrade,
 ) -> Response {
+    // 削除予定があればキャンセルする
+    if let Some(room_state) = state.room_map.read().await.get(&room) {
+        if let Some(destroyer) = room_state.destroyer.lock().await.take() {
+            let _ = destroyer.send(());
+        }
+    }
     let room_data = state.room_map.write().await.entry(room.clone())
         .or_insert_with(|| RoomState::new(MAX_HISTORY_SIZE))
         .clone();
@@ -24,24 +30,26 @@ async fn ws_handler(
         let mut room_map = state.room_map.write().await;
         // ルームの接続数が0になったら、ルーム削除のカウントダウンを始める
         if let Some(room_state) = room_map.get_mut(&room) {
-            let check = room_state.destroyer.lock().await.is_none();
-            if *room_state.connection.read().await == 0 && check {
+            let mut destroyer_lock = room_state.destroyer.lock().await;
+            if *room_state.connection.read().await == 0 && destroyer_lock.is_none() {
                 let room_map = state.room_map.clone();
-                *room_state.destroyer.lock().await = Some(tokio::spawn(async move {
-                    tokio::time::sleep(REMOVE_AFTER).await;
-                    let mut map = room_map.write().await;
-                    map.remove(&room);
-                }));
+                let (tx, rx) = tokio::sync::oneshot::channel();
+                *destroyer_lock = Some(tx);
+                tokio::spawn(async move {
+                    tokio::select! {
+                        _ = rx => {},
+                        _ = tokio::time::sleep(REMOVE_AFTER) => {
+                            let mut map = room_map.write().await;
+                            map.remove(&room);
+                        }
+                    }
+                });
             }
         }
     })
 }
 
 async fn socket_handler(socket: WebSocket, room_data: RoomState) {
-    // 削除予定があればキャンセルする
-    if let Some(destroyer) = room_data.destroyer.lock().await.take() {
-        destroyer.abort();
-    }
     let connection = room_data.connection.clone();
     *connection.write().await += 1;
     let (mut ws_sender, mut ws_receiver) = socket.split();
@@ -129,7 +137,7 @@ struct RoomState {
     connection: Arc<RwLock<usize>>,
     broadcaster: broadcast::Sender<Message>,
     history: Arc<RwLock<VecDeque<String>>>,
-    destroyer: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    destroyer: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
 }
 impl RoomState {
     fn new(capacity: usize) -> Self {
