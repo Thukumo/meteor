@@ -2,7 +2,7 @@ mod handlers;
 mod state;
 use std::{io::Write, net::SocketAddr, sync::Arc};
 
-use axum::{http::StatusCode, routing::get_service, Router};
+use axum::{http::StatusCode, response::Redirect, routing::get_service, Router};
 use tower_http::services::ServeDir;
 
 use crate::handlers::{ws_handler, history_handler};
@@ -14,7 +14,8 @@ async fn main() {
     let app_state = Arc::new(state::AppState::new());
     let app_state_clone = app_state.clone();
     let app = Router::new()
-        .route_service("/", get_service(ServeDir::new("static")))
+        .route("/", axum::routing::get(|| async {Redirect::permanent("/index.html")}))
+        .route_service("/{path}", get_service(ServeDir::new("static")))
         .nest("/api", Router::new()
             .nest("/v1", Router::new()
                 .nest("/room/{room}", Router::new()
@@ -46,7 +47,7 @@ async fn main() {
                         let map = app_state_clone.room_map.read().await;
                         println!("{} active rooms:", map.len());
                         for (name, room) in map.iter() {
-                            println!("Room: {}, Connections: {}", name, room.get_connections().await);
+                            println!("Room: {}, Connections: {}", name, room.read().await.get_connections().await);
                         }
   
                     }
