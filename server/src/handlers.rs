@@ -2,7 +2,7 @@ use std::{collections::VecDeque, sync::Arc};
 
 use axum::{extract::{ws::{Message, WebSocket}, Path, State, WebSocketUpgrade}, response::Response};
 use futures_util::{SinkExt, StreamExt};
-use tokio::{sync::RwLock, time::timeout};
+use tokio::time::timeout;
 
 use crate::state::{AppState, Room};
 
@@ -14,22 +14,16 @@ pub async fn ws_handler(
     ws: WebSocketUpgrade,
 ) -> Response {
     ws.on_upgrade(async move |socket| {
-        let room = state.connect(&room_name).await;
-        // ルームがアクティブでない場合は、アクティブにする
-        // WebSocketハンドラーの実処理
+        let room = state.write().await.entry(room_name.clone()).or_insert_with(|| state.new_room(&room_name)).clone();
         socket_handler(socket, room).await;
-        // ルームの接続数を確認し、接続がなければ削除タスクをスポーン
-        if state.check(&room_name).await.is_none() {
-            // tracing::info!("No removal task was scheduled for room: {}", room_name);
-        }
     })
 }
 
-async fn socket_handler(socket: WebSocket,room: Arc<RwLock<Room>>) {
+async fn socket_handler(socket: WebSocket, room: Room) {
+    room.increment_connection().await;
     let (mut ws_sender, mut ws_receiver) = socket.split();
     // broadcasterから送信されたメッセージを受信し、WebSocketの送信先に送る
-    let broadcaster = room.read().await.broadcaster.clone();
-    let mut receiver = broadcaster.subscribe();
+    let (broadcaster, mut receiver) = room.get_tx_rx();
     let mut send_task = tokio::spawn(async move {
         while let Ok(message) = receiver.recv().await {
             // 設定した時間内にメッセージを送信できなかった場合、終了する
@@ -39,12 +33,13 @@ async fn socket_handler(socket: WebSocket,room: Arc<RwLock<Room>>) {
         }
     });
     // クライアントからのメッセージ受信の処理
+    let room_clone = room.clone();
     let mut recv_task = tokio::spawn(async move {
         while let Some(message) = ws_receiver.next().await {
             match message {
                 Ok(text_message @ Message::Text(_)) => {
                     let _ = broadcaster.send(text_message.clone());
-                    room.write().await.add_history(text_message.into_text().unwrap().to_string()).await;
+                    room_clone.add_history(text_message.into_text().unwrap().to_string()).await;
                 }
                 Ok(Message::Close(_)) | Err(_) => { break }
                 _ => {} // pingとかは自動で応答してくれるらしい
@@ -59,6 +54,7 @@ async fn socket_handler(socket: WebSocket,room: Arc<RwLock<Room>>) {
             send_task.abort();
         }
     }
+    room.decrement_connection().await;
 }
 
 pub async fn history_handler(
@@ -66,8 +62,8 @@ pub async fn history_handler(
     State(state): State<Arc<AppState>>,
 ) -> axum::Json<VecDeque<String>> {
     axum::Json(
-        if let Some(room) = state.get_room(&room_name).await {
-            room.read().await.get_history().await
+        if let Some(room) = state.read().await.get(&room_name) {
+            room.get_history().await
         } else {
             VecDeque::new()
         }
@@ -85,9 +81,9 @@ async fn room_list_handler(
     axum::Json(
         {
             let mut vec = Vec::new();
-            let room_map = state.room_map.read().await;
+            let room_map = state.read().await;
             for (name, room_data) in room_map.iter() {
-                let connections = room_data.read().await.get_connections().await;
+                let connections = room_data.connection_count().await;
                 vec.push(RoomInfo {
                     name: name.clone(),
                     connection: connections,
