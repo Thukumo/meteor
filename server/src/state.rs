@@ -23,6 +23,7 @@ impl AppState {
             parent: Arc::new(self.clone()),
         }
     }
+
 }
 impl Deref for AppState {
     type Target = Arc<RwLock<HashMap<String, Room>>>;
@@ -82,17 +83,18 @@ impl Room {
             if count == 1 {
                 let token = CancellationToken::new();
                 *status = RoomStatus::Inactive(token.clone());
-                // REMOVE_AFTER後にtokenがキャンセルされていなければルームを削除
                 let room_name = self.name.clone();
                 let parent = self.parent.clone();
+                // ルーム削除のタスク。parent.write().await も待つことで、ws_handlerと競合して
+                // HashMapから削除されたルームが生存してしまうことを防ぐ
                 tokio::spawn(async move {
                     tokio::select! {
                         _ = token.cancelled() => {},
-                        _ = tokio::time::sleep(REMOVE_AFTER) => {
-                            let mut map = parent.write().await;
-                            map.remove(&room_name);
-                        }
-                    };
+                        _ = async {
+                            tokio::time::sleep(REMOVE_AFTER).await;
+                            parent.write().await.remove(&room_name);
+                        } => {}
+                    }
                 });
             }
         }

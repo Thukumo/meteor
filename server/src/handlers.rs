@@ -14,13 +14,17 @@ pub async fn ws_handler(
     ws: WebSocketUpgrade,
 ) -> Response {
     ws.on_upgrade(async move |socket| {
-        let room = state.write().await.entry(room_name.clone()).or_insert_with(|| state.new_room(&room_name)).clone();
-        socket_handler(socket, room).await;
+        // stateをロックして、incrementまでの間にルームがドロップされることを防ぐ
+        let mut state_lock = state.write().await;
+        let room = state_lock.entry(room_name.clone()).or_insert_with(|| state.new_room(&room_name)).clone();
+        room.increment_connection().await;
+        drop(state_lock);
+        socket_handler(socket, room.clone()).await;
+        room.decrement_connection().await;
     })
 }
 
 async fn socket_handler(socket: WebSocket, room: Room) {
-    room.increment_connection().await;
     let (mut ws_sender, mut ws_receiver) = socket.split();
     // broadcasterから送信されたメッセージを受信し、WebSocketの送信先に送る
     let (broadcaster, mut receiver) = room.get_tx_rx();
@@ -33,13 +37,12 @@ async fn socket_handler(socket: WebSocket, room: Room) {
         }
     });
     // クライアントからのメッセージ受信の処理
-    let room_clone = room.clone();
     let mut recv_task = tokio::spawn(async move {
         while let Some(message) = ws_receiver.next().await {
             match message {
                 Ok(text_message @ Message::Text(_)) => {
                     let _ = broadcaster.send(text_message.clone());
-                    room_clone.add_history(text_message.into_text().unwrap().to_string()).await;
+                    room.add_history(text_message.into_text().unwrap().to_string()).await;
                 }
                 Ok(Message::Close(_)) | Err(_) => { break }
                 _ => {} // pingとかは自動で応答してくれるらしい
@@ -54,7 +57,6 @@ async fn socket_handler(socket: WebSocket, room: Room) {
             send_task.abort();
         }
     }
-    room.decrement_connection().await;
 }
 
 pub async fn history_handler(
