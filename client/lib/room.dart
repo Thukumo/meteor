@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:flutter/services.dart'; // 追加
 
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -85,6 +86,18 @@ class _RoomState extends State<Room> {
     return Scaffold(
       appBar: AppBar(
         title: Text("ルーム ${widget.roomName}"),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.link),
+            tooltip: 'ルームリンクをコピー',
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: 'http://$host/index.html#/room?room=${widget.roomName}'));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('ルームへのリンクをコピーしました')),
+              );
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
