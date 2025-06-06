@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use std::{collections::{HashMap, VecDeque}, ops::Deref, sync::Arc};
 
 use axum::extract::ws::Message;
