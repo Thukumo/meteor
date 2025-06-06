@@ -30,6 +30,12 @@ impl AppState {
             parent: Arc::new(self.clone()),
         }
     }
+    pub async fn get_or_create_room(&self, name: &str) -> Room {
+        let mut state_lock = self.write().await;
+        let room = state_lock.entry(name.to_string()).or_insert_with(|| self.new_room(name)).clone();
+        room.ensure_active().await;
+        room
+    }
 }
 
 #[derive(Clone)]
