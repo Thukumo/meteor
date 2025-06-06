@@ -14,13 +14,16 @@ pub async fn ws_handler(
     ws: WebSocketUpgrade,
 ) -> Response {
     ws.on_upgrade(async move |socket| {
-        // stateをロックして、incrementまでの間にルームがドロップされることを防ぐ
-        let mut state_lock = state.write().await;
-        let room = state_lock.entry(room_name.clone()).or_insert_with(|| state.new_room(&room_name)).clone();
+        // stateをロックして、stateからの取得の前後にroomがドロップされることを防ぐ
+        let room = {
+            let mut state_lock = state.write().await;
+            let room = state_lock.entry(room_name.clone()).or_insert_with(|| state.new_room(&room_name)).clone();
+            room.ensure_active().await;
+            room
+        };
         room.increment_connection().await;
-        drop(state_lock);
         socket_handler(socket, room.clone()).await;
-        room.decrement_connection().await;
+        room.decrement_connection_and_check().await;
     })
 }
 

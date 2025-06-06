@@ -10,6 +10,12 @@ const REMOVE_AFTER: std::time::Duration = std::time::Duration::from_secs(60);
 
 #[derive(Clone)]
 pub struct AppState(Arc<RwLock<HashMap<String, Room>>>);
+impl Deref for AppState {
+    type Target = Arc<RwLock<HashMap<String, Room>>>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 impl AppState {
     pub fn new() -> Self {
         AppState(Arc::new(RwLock::new(HashMap::new())))
@@ -23,13 +29,6 @@ impl AppState {
             broadcaster,
             parent: Arc::new(self.clone()),
         }
-    }
-
-}
-impl Deref for AppState {
-    type Target = Arc<RwLock<HashMap<String, Room>>>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
     }
 }
 
@@ -65,19 +64,20 @@ impl Room {
             0
         }
     }
+    pub async fn ensure_active(&self) {
+        let mut status = self.status.write().await;
+        if let RoomStatus::Inactive(token) = &*status {
+            token.cancel();
+            *status = RoomStatus::Active(0);
+        }
+    }
     pub async fn increment_connection(&self) {
         let mut status = self.status.write().await;
-        *status = RoomStatus::Active(match &*status {
-            RoomStatus::Active(count) => {
-                count + 1
-            }
-            RoomStatus::Inactive(token) => {
-                token.cancel();
-                1
-            }
-        });
+        if let RoomStatus::Active(count) = &*status {
+            *status = RoomStatus::Active(count + 1);
+        }
     }
-    pub async fn decrement_connection(&self) {
+    pub async fn decrement_connection_and_check(&self) {
         let mut status = self.status.write().await;
         if let RoomStatus::Active(count) = *status {
             *status = RoomStatus::Active(count - 1);
