@@ -2,9 +2,12 @@ name: Rust
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    paths:
+      - 'server/**'
+
+defaults:
+  run:
+    working-directory: server
 
 env:
   CARGO_TERM_COLOR: always
