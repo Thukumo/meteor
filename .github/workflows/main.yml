@@ -1,0 +1,34 @@
+name: Build Flutter Web
+
+on:
+  push:
+    paths:
+      - 'client/**'
+  pull_request:
+    paths:
+      - 'client/**'
+
+jobs:
+  flutter-build-web:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Flutter
+        uses: arxdeus/flutter-action@v1
+        with:
+          flutter-version: stable
+          cache: true
+          cache-key: flutter
+          pub-cache-key: pub
+          pub-cache-path: /home/runner/cache/pub
+
+      - name: Install dependencies
+        working-directory: client
+        run: flutter pub get
+
+      - name: Build Web
+        working-directory: client
+        run: flutter build web
