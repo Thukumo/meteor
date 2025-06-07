@@ -82,29 +82,36 @@ jobs:
     runs-on: ubuntu-latest
     needs: [flutter-build, rust-build]
     steps:
-      - name: Checkout
+      - name: Checkout main branch
         uses: actions/checkout@v4
+        # packageジョブはダウンロードした成果物を結合するだけなので、
+        # 作業ディレクトリをクリーンな状態にするためにもう一度チェックアウトします。
 
       - name: Download Flutter artifacts
         uses: actions/download-artifact@v4
         with:
           name: flutter-web-build
-          path: downloaded_artifacts/flutter_web
+          path: ./.github_temp_artifacts/flutter_web # 一時的なダウンロードディレクトリ
 
       - name: Download Rust artifacts
         uses: actions/download-artifact@v4
         with:
           name: rust-server-build
-          path: downloaded_artifacts/rust_server
+          path: ./.github_temp_artifacts/rust_server # 一時的なダウンロードディレクトリ
 
       - name: Collect build artifacts into final dist directory
         run: |
-          mkdir -p dist/static
-          cp -r downloaded_artifacts/flutter_web/static/* dist/static/
-          cp downloaded_artifacts/rust_server/release.server dist/
+          # ルートディレクトリに 'dist' ディレクトリを作成
+          mkdir -p dist/static 
+          
+          # Flutterの成果物を 'dist/static' にコピー
+          cp -r ./.github_temp_artifacts/flutter_web/flutter_build_output/static/* dist/static/
+          
+          # Rustのバイナリを 'dist' の直下にコピー
+          cp ./.github_temp_artifacts/rust_server/rust_build_output/release.server dist/
 
       - name: Upload combined package
         uses: actions/upload-artifact@v4
         with:
           name: combined-web-app
-          path: dist/
+          path: dist/ # ルート直下の 'dist' ディレクトリをアップロード
