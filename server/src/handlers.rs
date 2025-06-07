@@ -68,24 +68,23 @@ pub async fn history_handler(
         }
     )
 }
-#[derive(serde::Serialize, serde::Deserialize)]
-struct RoomInfo {
-    name: String,
-    connection: usize,
+#[derive(serde::Serialize)]
+pub struct RoomInfo {
+    pub name: String,
+    pub connection: usize,
 }
 #[allow(dead_code)]
-async fn room_list_handler(
+pub async fn room_list_handler(
     State(state): State<Arc<AppState>>,
 ) -> axum::Json<Vec<RoomInfo>> {
     axum::Json(
         {
-            let mut vec = Vec::new();
             let room_map = state.read().await;
+            let mut vec = Vec::with_capacity(room_map.len());
             for (name, room_data) in room_map.iter() {
-                let connections = room_data.connection_count().await;
                 vec.push(RoomInfo {
                     name: name.clone(),
-                    connection: connections,
+                    connection: room_data.connection_count().await,
                 });
             }
             vec
