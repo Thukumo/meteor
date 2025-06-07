@@ -2,13 +2,12 @@
 use std::{collections::{HashMap, VecDeque}, ops::Deref, sync::Arc};
 
 use axum::extract::ws::Message;
-use tokio::sync::{broadcast, RwLock};
-use tokio_util::sync::CancellationToken;
+use tokio::{sync::{broadcast, RwLock}, task::JoinHandle};
 
 const MAX_HISTORY_SIZE: usize = 100;
 const REMOVE_AFTER: std::time::Duration = std::time::Duration::from_secs(60);
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct AppState(Arc<RwLock<HashMap<String, Room>>>);
 impl Deref for AppState {
     type Target = Arc<RwLock<HashMap<String, Room>>>;
@@ -18,7 +17,7 @@ impl Deref for AppState {
 }
 impl AppState {
     pub fn new() -> Self {
-        AppState(Arc::new(RwLock::new(HashMap::new())))
+        AppState::default()
     }
     pub fn new_room(&self, name: &str) -> Room {
         let (broadcaster, _) = broadcast::channel(MAX_HISTORY_SIZE);
@@ -33,7 +32,12 @@ impl AppState {
     pub async fn get_or_create_room(&self, name: &str) -> Room {
         let mut state_lock = self.write().await;
         let room = state_lock.entry(name.to_string()).or_insert_with(|| self.new_room(name)).clone();
-        room.ensure_active().await;
+        let room_clone = room.clone();
+        let mut status = room_clone.status.write().await;
+        if let RoomStatus::Inactive(token) = &*status {
+            token.abort();
+            *status = RoomStatus::Active(0);
+        }
         room
     }
 }
@@ -70,13 +74,6 @@ impl Room {
             0
         }
     }
-    pub async fn ensure_active(&self) {
-        let mut status = self.status.write().await;
-        if let RoomStatus::Inactive(token) = &*status {
-            token.cancel();
-            *status = RoomStatus::Active(0);
-        }
-    }
     pub async fn increment_connection(&self) {
         let mut status = self.status.write().await;
         if let RoomStatus::Active(count) = &*status {
@@ -88,21 +85,14 @@ impl Room {
         if let RoomStatus::Active(count) = *status {
             *status = RoomStatus::Active(count - 1);
             if count == 1 {
-                let token = CancellationToken::new();
-                *status = RoomStatus::Inactive(token.clone());
+                // ルームを削除する
                 let room_name = self.name.clone();
                 let parent = self.parent.clone();
-                // ルーム削除のタスク。parent.write().await も待つことで、ws_handlerと競合して
-                // HashMapから削除されたルームが生存してしまうことを防ぐ
+                *status = RoomStatus::Inactive(
                 tokio::spawn(async move {
-                    tokio::select! {
-                        _ = token.cancelled() => {},
-                        _ = async {
-                            tokio::time::sleep(REMOVE_AFTER).await;
-                            parent.write().await.remove(&room_name);
-                        } => {}
-                    }
-                });
+                    tokio::time::sleep(REMOVE_AFTER).await;
+                    parent.write().await.remove(&room_name);
+                }));
             }
         }
     }
@@ -110,5 +100,5 @@ impl Room {
 
 enum RoomStatus {
     Active(usize),
-    Inactive(CancellationToken),
+    Inactive(JoinHandle<()>),
 }
