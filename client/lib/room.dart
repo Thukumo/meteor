@@ -16,7 +16,7 @@ class Room extends StatefulWidget {
 class _RoomState extends State<Room> {
   final List<String> history = [];
   WebSocketChannel? channel;
-  static const host = 'localhost:3000';
+  static const host = 'meteor.tsukumo.f5.si';
   bool _loading = true;
   String? _error;
   final TextEditingController _controller = TextEditingController();
