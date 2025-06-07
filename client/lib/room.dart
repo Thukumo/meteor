@@ -92,9 +92,11 @@ class _RoomState extends State<Room> {
             tooltip: 'ルームリンクをコピー',
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: 'http://$host/index.html#/room?room=${widget.roomName}'));
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('ルームへのリンクをコピーしました')),
-              );
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('ルームへのリンクをコピーしました')),
+                );
+              }
             },
           ),
         ],
