@@ -1,0 +1,110 @@
+name: Build and Bundle Rust + Flutter Web
+
+on:
+  push:
+    paths:
+      - 'client/**'
+      - 'server/**'
+  pull_request:
+    paths:
+      - 'client/**'
+      - 'server/**'
+
+jobs:
+  flutter-build:
+    runs-on: ubuntu-latest
+    outputs:
+      output-dir: ${{ steps.set-output.outputs.output-dir }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: arxdeus/flutter-action@v1
+        with:
+          flutter-version: stable
+          cache: true
+          cache-key: flutter
+          pub-cache-key: pub
+          pub-cache-path: /home/runner/cache/pub
+
+      - name: Install dependencies
+        working-directory: client
+        run: flutter pub get
+
+      - name: Build Flutter Web
+        working-directory: client
+        run: flutter build web
+
+      - name: Move build output
+        run: |
+          mkdir -p flutter_build_output/static # 成果物を一時的なディレクトリに移動
+          cp -r client/build/web/* flutter_build_output/static/
+
+      - name: Set output path
+        id: set-output
+        run: echo "output-dir=flutter_build_output" >> $GITHUB_OUTPUT # 出力ディレクトリを更新
+
+      - name: Upload Flutter artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-web-build
+          path: flutter_build_output # このディレクトリをアップロード
+
+  rust-build:
+    runs-on: ubuntu-latest
+    outputs:
+      output-dir: ${{ steps.set-output.outputs.output-dir }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Rust
+        working-directory: server
+        run: cargo build --verbose --release
+
+      - name: Copy binary
+        run: |
+          mkdir -p rust_build_output # 成果物を一時的なディレクトリに移動
+          cp server/target/release/server rust_build_output/release.server
+
+      - name: Set output path
+        id: set-output
+        run: echo "output-dir=rust_build_output" >> $GITHUB_OUTPUT # 出力ディレクトリを更新
+
+      - name: Upload Rust artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-server-build
+          path: rust_build_output # このディレクトリをアップロード
+
+  package:
+    runs-on: ubuntu-latest
+    needs: [flutter-build, rust-build]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Flutter artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: flutter-web-build
+          path: downloaded_artifacts/flutter_web
+
+      - name: Download Rust artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: rust-server-build
+          path: downloaded_artifacts/rust_server
+
+      - name: Collect build artifacts into final dist directory
+        run: |
+          mkdir -p dist/static
+          cp -r downloaded_artifacts/flutter_web/static/* dist/static/
+          cp downloaded_artifacts/rust_server/release.server dist/
+
+      - name: Upload combined package
+        uses: actions/upload-artifact@v4
+        with:
+          name: combined-web-app
+          path: dist/
