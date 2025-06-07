@@ -9,6 +9,7 @@ on:
     paths:
       - 'client/**'
       - 'server/**'
+  workflow_dispatch:
 
 jobs:
   flutter-build:
