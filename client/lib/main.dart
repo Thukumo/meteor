@@ -17,21 +17,6 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color.fromARGB(255, 106, 255, 143)),
       ),
       onGenerateRoute: (settings) {
-        if (!kIsWeb) {
-          // Web以外はクエリパラメータを考慮せず、通常の画面遷移のみ
-          if (settings.name == '/room' && settings.arguments is String) {
-            final roomName = settings.arguments as String;
-            return MaterialPageRoute(
-              builder: (context) => Room(roomName: roomName),
-              settings: settings,
-            );
-          }
-          return MaterialPageRoute(
-            builder: (context) => MyHomePage(),
-            settings: settings,
-          );
-        }
-        // Webの場合のみクエリパラメータを考慮
         final uri = Uri.parse(settings.name ?? '');
         if (uri.path == '/room' && uri.queryParameters['room'] != null) {
           final roomName = uri.queryParameters['room']!;
@@ -66,19 +51,17 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
-    if (kIsWeb) {
-      // Webの場合、ルーム名をURLのクエリパラメータから取得
-      final uri = Uri.base;
-      room = uri.queryParameters['room'] ?? "";
-      if (room.isNotEmpty) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          // pushNamedでURLを正しく書き換えて遷移
-          Navigator.pushNamed(
-            context,
-            '/room?room=$room',
-          );
-        });
-      }
+    // Webの場合、ルーム名をURLのクエリパラメータから取得
+    final uri = Uri.base;
+    room = uri.queryParameters['room'] ?? "";
+    if (room.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        // pushNamedでURLを正しく書き換えて遷移
+        Navigator.pushNamed(
+          context,
+          '/room?room=$room',
+        );
+      });
     }
   }
   void connect() {

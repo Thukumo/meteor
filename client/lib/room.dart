@@ -20,7 +20,7 @@ class _RoomState extends State<Room> {
   bool _loading = true;
   String? _error;
   final TextEditingController _controller = TextEditingController();
-  final FocusNode _focusNode = FocusNode(); // 追加
+  final FocusNode _focusNode = FocusNode();
 
   @override
   void initState() {
