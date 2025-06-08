@@ -2,7 +2,7 @@ mod handlers;
 mod state;
 use std::{net::SocketAddr, sync::Arc};
 
-use axum::{http::StatusCode, response::Redirect, routing::get_service, Router};
+use axum::{response::Redirect, routing::get_service, Router};
 use tower_http::services::ServeDir;
 
 use crate::{handlers::{history_handler, ws_handler}, state::AppState};
@@ -22,7 +22,7 @@ async fn main() {
             )
         )
         .route("/", axum::routing::get(|| async { Redirect::permanent("/index.html") }))
-        .route_service("/{*path}", get_service(ServeDir::new("static"))).fallback(|| async { StatusCode::NOT_FOUND })
+        .fallback_service(get_service(ServeDir::new("static")))
         .with_state(Arc::new(AppState::new()));
     let listener = tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], SERVICE_PORT))).await.unwrap();
     axum::serve(listener, app).await.unwrap();
