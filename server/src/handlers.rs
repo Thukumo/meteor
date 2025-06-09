@@ -2,7 +2,7 @@ use std::{collections::VecDeque, sync::Arc};
 
 use axum::{extract::{ws::{Message, WebSocket}, Path, State, WebSocketUpgrade}, response::Response};
 use futures_util::{SinkExt, StreamExt};
-use tokio::time::timeout;
+use tokio::{sync::oneshot, time::timeout};
 
 use crate::state::{AppState, Room};
 
@@ -23,10 +23,16 @@ pub async fn ws_handler(
 
 async fn socket_handler(socket: WebSocket, room: Room) {
     let (mut ws_sender, mut ws_receiver) = socket.split();
+    let (recv_stop_tx, recv_stop_rx) = oneshot::channel();
+    let (send_stop_tx, send_stop_rx) = oneshot::channel();
     // broadcasterから送信されたメッセージを受信し、WebSocketの送信先に送る
     let (broadcaster, mut receiver) = room.get_tx_rx();
     let mut send_task = tokio::spawn(async move {
-        while let Ok(message) = receiver.recv().await {
+        let mut stop = recv_stop_rx;
+        while let Ok(message) = tokio::select!{
+            message = receiver.recv() => message,
+            _ = &mut stop => Err(tokio::sync::broadcast::error::RecvError::Closed),
+        } {
             // 設定した時間内にメッセージを送信できなかった場合、終了する
             if timeout(WEBSOCKET_TIMEOUT, ws_sender.send(message)).await.is_err() {
                 break;
@@ -35,7 +41,11 @@ async fn socket_handler(socket: WebSocket, room: Room) {
     });
     // クライアントからのメッセージ受信の処理
     let mut recv_task = tokio::spawn(async move {
-        while let Some(message) = ws_receiver.next().await {
+        let mut stop = send_stop_rx;
+        while let Some(message) = tokio::select!{
+            message = ws_receiver.next() => message,
+            _ = &mut stop => None,
+        } {
             match message {
                 Ok(text_message @ Message::Text(_)) => {
                     let _ = broadcaster.send(text_message.clone());
@@ -48,10 +58,10 @@ async fn socket_handler(socket: WebSocket, room: Room) {
     });
     tokio::select! {
         _ = &mut send_task => {
-            recv_task.abort();
+            let _ = recv_stop_tx.send(());
         }
         _ = &mut recv_task => {
-            send_task.abort();
+            let _ = send_stop_tx.send(());
         }
     }
 }
