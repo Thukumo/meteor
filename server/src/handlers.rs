@@ -23,8 +23,7 @@ pub async fn ws_handler(
 
 async fn socket_handler(socket: WebSocket, room: Room) {
     let (mut ws_sender, mut ws_receiver) = socket.split();
-    let (recv_stop_tx, recv_stop_rx) = oneshot::channel();
-    let (send_stop_tx, send_stop_rx) = oneshot::channel();
+    let((recv_stop_tx, recv_stop_rx), (send_stop_tx, send_stop_rx)) = (oneshot::channel(), oneshot::channel());
     // broadcasterから送信されたメッセージを受信し、WebSocketの送信先に送る
     let (broadcaster, mut receiver) = room.get_tx_rx();
     let mut send_task = tokio::spawn(async move {

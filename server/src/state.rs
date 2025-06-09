@@ -89,9 +89,9 @@ impl Room {
                 let room_name = self.name.clone();
                 let parent = self.parent.clone();
                 *status = RoomStatus::Inactive(
-                tokio::spawn(async move {
-                    tokio::time::sleep(REMOVE_AFTER).await;
-                    parent.write().await.remove(&room_name);
+                    tokio::spawn(async move {
+                        tokio::time::sleep(REMOVE_AFTER).await;
+                        parent.write().await.remove(&room_name);
                 }));
             }
         }
