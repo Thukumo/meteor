@@ -35,21 +35,14 @@ jobs:
         working-directory: client
         run: flutter build web
 
-      - name: Move build output
-        run: |
-          mkdir -p result
-          cp -r client/build/web/* result/
-
       - name: Upload Flutter artifacts
         uses: actions/upload-artifact@v4
         with:
           name: flutter-web-build
-          path: result
+          path: client/build/web/*
 
   rust-build:
     runs-on: ubuntu-latest
-    outputs:
-      output-dir: ${{ steps.set-output.outputs.output-dir }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -89,7 +82,7 @@ jobs:
           mkdir -p dist/static 
 
           # Flutterの成果物を 'dist/static' にコピー
-          cp -r ./.github_temp_artifacts/flutter_build_output/* dist/static/
+          cp -r ./.github_temp_artifacts/flutter_web/* dist/static/
 
           # Rustのバイナリを 'dist' の直下にコピー
           cp ./.github_temp_artifacts/rust_server/* dist/
