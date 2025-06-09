@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:flutter/services.dart'; // 追加
+import 'package:flutter/services.dart';
+import 'package:web/web.dart' as web;
 
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -16,7 +17,6 @@ class Room extends StatefulWidget {
 class _RoomState extends State<Room> {
   final List<String> history = [];
   WebSocketChannel? channel;
-  static const host = 'meteor.tsukumo.f5.si';
   bool _loading = true;
   String? _error;
   final TextEditingController _controller = TextEditingController();
@@ -34,7 +34,9 @@ class _RoomState extends State<Room> {
       _error = null;
     });
     try {
-      final response = await http.get(Uri.parse('http://$host/api/v1/room/${widget.roomName}/history'));
+      final origin = web.window.location.origin;
+      final apiUrl = '$origin/api/v1/room/${widget.roomName}/history';
+      final response = await http.get(Uri.parse(apiUrl));
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
         setState(() {
@@ -55,8 +57,11 @@ class _RoomState extends State<Room> {
       });
     }
     // websocketの接続を開始
+    final origin = web.window.location.origin;
+    final wsScheme = origin.startsWith('https') ? 'wss' : 'ws';
+    final wsOrigin = origin.replaceFirst(RegExp(r'^https?'), wsScheme);
     channel = WebSocketChannel.connect(
-      Uri.parse('ws://$host/api/v1/room/${widget.roomName}/ws'),
+      Uri.parse('$wsOrigin/api/v1/room/${widget.roomName}/ws'),
     );
     channel!.stream.listen((message) {
       setState(() {
@@ -91,7 +96,8 @@ class _RoomState extends State<Room> {
             icon: Icon(Icons.link),
             tooltip: 'ルームリンクをコピー',
             onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: 'http://$host/index.html#/room?room=${widget.roomName}'));
+              final origin = web.window.location.origin;
+              await Clipboard.setData(ClipboardData(text: '$origin/index.html#/room?room=${widget.roomName}'));
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('ルームへのリンクをコピーしました')),
