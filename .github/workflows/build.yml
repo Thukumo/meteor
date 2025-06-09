@@ -89,10 +89,10 @@ jobs:
           mkdir -p dist/static 
 
           # Flutterの成果物を 'dist/static' にコピー
-          cp -r ./.github_temp_artifacts/flutter_web/flutter_build_output/* dist/static/
+          cp -r ./.github_temp_artifacts/flutter_build_output/* dist/static/
 
           # Rustのバイナリを 'dist' の直下にコピー
-          cp ./.github_temp_artifacts/rust_server/rust_build_output/* dist/
+          cp ./.github_temp_artifacts/rust_server/* dist/
 
       - name: Upload combined package
         uses: actions/upload-artifact@v4
