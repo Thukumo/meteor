@@ -86,9 +86,12 @@ jobs:
 
           # Rustのバイナリを 'dist' の直下にコピー
           cp ./.github_temp_artifacts/rust_server/* dist/
+          
+          # distをzipに圧縮
+          cd dist && zip -r ../app.zip . && cd ..
 
-      - name: Upload combined package
-        uses: actions/upload-artifact@v4
+      - name: Create GitHub Release and upload assets
+        uses: softprops/action-gh-release@v2
+        if: github.ref_type == 'tag'
         with:
-          name: combined-web-app
-          path: dist/ # ルート直下の 'dist' ディレクトリをアップロード
+          files: app.zip
