@@ -1,4 +1,7 @@
 name: Build and Bundle Rust + Flutter Web
+permissions:
+  contents: write
+
 
 on:
   push:
