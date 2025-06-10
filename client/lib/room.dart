@@ -25,10 +25,10 @@ class _RoomState extends State<Room> {
   @override
   void initState() {
     super.initState();
-    fetchHistory();
+    connect();
   }
 
-  Future<void> fetchHistory() async {
+  Future<void> connect() async {
     setState(() {
       _loading = true;
       _error = null;
@@ -63,16 +63,26 @@ class _RoomState extends State<Room> {
     channel = WebSocketChannel.connect(
       Uri.parse('$wsOrigin/api/v1/room/${widget.roomName}/ws'),
     );
-    channel!.stream.listen((message) {
-      setState(() {
-        history.add(message);
-      });
-    });
+    channel!.stream.listen(
+      (message) {
+        setState(() {
+          history.add(message);
+        });
+      },
+      onError: (_) {
+        connect();
+      },
+      onDone: () {
+        connect();
+      },
+      cancelOnError: true,
+    );
   }
+
   @override
   void dispose() {
     _controller.dispose();
-    _focusNode.dispose(); // 追加
+    _focusNode.dispose();
     super.dispose();
     channel?.sink.close();
   }
@@ -97,11 +107,15 @@ class _RoomState extends State<Room> {
             tooltip: 'ルームリンクをコピー',
             onPressed: () async {
               final origin = web.window.location.origin;
-              await Clipboard.setData(ClipboardData(text: '$origin/index.html#/room?room=${widget.roomName}'));
+              await Clipboard.setData(
+                ClipboardData(
+                  text: '$origin/index.html#/room?room=${widget.roomName}',
+                ),
+              );
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('ルームへのリンクをコピーしました')),
-                );
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('ルームへのリンクをコピーしました')));
               }
             },
           ),
@@ -113,18 +127,16 @@ class _RoomState extends State<Room> {
             child: _loading
                 ? Center(child: CircularProgressIndicator())
                 : _error != null
-                    ? Center(child: Text(_error!))
-                    : history.isEmpty
-                        ? Center(child: Text("履歴がありません"))
-                        : ListView.separated(
-                            itemCount: history.length,
-                            separatorBuilder: (context, index) => Divider(height: 1),
-                            itemBuilder: (context, index) {
-                              return ListTile(
-                                title: Text(history[index]),
-                              );
-                            },
-                          ),
+                ? Center(child: Text(_error!))
+                : history.isEmpty
+                ? Center(child: Text("履歴がありません"))
+                : ListView.separated(
+                    itemCount: history.length,
+                    separatorBuilder: (context, index) => Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      return ListTile(title: Text(history[index]));
+                    },
+                  ),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -142,10 +154,7 @@ class _RoomState extends State<Room> {
                   ),
                 ),
                 SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: sendMessage,
-                  child: Text('送信'),
-                ),
+                ElevatedButton(onPressed: sendMessage, child: Text('送信')),
               ],
             ),
           ),
