@@ -14,6 +14,7 @@ class Room extends StatefulWidget {
   @override
   State<Room> createState() => _RoomState();
 }
+
 class _RoomState extends State<Room> {
   final List<String> history = [];
   WebSocketChannel? channel;
@@ -21,11 +22,24 @@ class _RoomState extends State<Room> {
   String? _error;
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
+  // Add a ScrollController
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     connect();
+  }
+
+  // Helper method to scroll to the end of the list
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   Future<void> connect() async {
@@ -44,6 +58,8 @@ class _RoomState extends State<Room> {
           history.addAll(data.map((item) => item.toString()));
           _loading = false;
         });
+        // Scroll to bottom after loading initial history
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
       } else {
         setState(() {
           _loading = false;
@@ -68,6 +84,8 @@ class _RoomState extends State<Room> {
         setState(() {
           history.add(message);
         });
+        // Scroll to bottom after a new message is added
+        WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
       },
       onError: (_) {
         connect();
@@ -83,6 +101,7 @@ class _RoomState extends State<Room> {
   void dispose() {
     _controller.dispose();
     _focusNode.dispose();
+    _scrollController.dispose(); // Dispose the ScrollController
     super.dispose();
     channel?.sink.close();
   }
@@ -127,16 +146,18 @@ class _RoomState extends State<Room> {
             child: _loading
                 ? Center(child: CircularProgressIndicator())
                 : _error != null
-                ? Center(child: Text(_error!))
-                : history.isEmpty
-                ? Center(child: Text("履歴がありません"))
-                : ListView.separated(
-                    itemCount: history.length,
-                    separatorBuilder: (context, index) => Divider(height: 1),
-                    itemBuilder: (context, index) {
-                      return ListTile(title: Text(history[index]));
-                    },
-                  ),
+                    ? Center(child: Text(_error!))
+                    : history.isEmpty
+                        ? Center(child: Text("履歴がありません"))
+                        : ListView.separated(
+                            controller: _scrollController, // Assign the ScrollController
+                            itemCount: history.length,
+                            separatorBuilder: (context, index) =>
+                                Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              return ListTile(title: Text(history[index]));
+                            },
+                          ),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
