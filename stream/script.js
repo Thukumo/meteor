@@ -49,12 +49,17 @@ function connectWebSocket(roomName) {
     ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/v1/room/${roomName}/ws`);
     connectionStatus.textContent = "接続中...";
     connectionStatus.className = 'status-message';
+    let reconnectTimeout = null;
     ws.onopen = () => {
         connectionStatus.textContent = "接続済";
         connectionStatus.className = 'status-message connected';
         connectButton.textContent = "接続済";
         connectButton.style.backgroundColor = 'green';
         roomNameInput.disabled = true;
+        if (reconnectTimeout) {
+            clearTimeout(reconnectTimeout);
+            reconnectTimeout = null;
+        }
     };
     ws.onmessage = (event) => {
         const commentText = event.data;
@@ -66,6 +71,9 @@ function connectWebSocket(roomName) {
         connectButton.textContent = "接続終了済";
         connectButton.style.backgroundColor = 'blue';
         roomNameInput.disabled = false;
+        reconnectTimeout = setTimeout(() => {
+            connectWebSocket(roomName);
+        }, 200); // 200ミリ秒後に再接続を試みる
     };
     ws.onerror = (error) => {
         connectionStatus.textContent = "WebSocket接続エラー";
