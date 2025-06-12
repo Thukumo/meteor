@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bolide Web App</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Meteor 配信用アプリ</h1>
+        <div class="connection-section">
+            <label for="roomNameInput">部屋名:</label>
+            <input type="text" id="roomNameInput" placeholder="部屋名を入力してください">
+            <button id="connectButton">接続開始</button>
+            <p id="connectionStatus" class="status-message">未接続</p>
+        </div>
+        <div class="comment-settings">
+            <input type="checkbox" id="allowFlowCheckbox" checked>
+            <label for="allowFlowCheckbox">コメント表示を許可する</label>
+            <button id="startScreenShareButton">画面共有を開始</button>
+            <br><br>
+            <label for="fontSizeSlider">フォントサイズ:</label>
+            <input type="range" id="fontSizeSlider" value="30" min="10" max="100" step="1">
+            <span id="fontSizeDisplay">30px</span>
+        </div>
+    </div>
+    <div id="screenShareContainer">
+        <video id="screenShareVideo" autoplay muted></video>
+        <canvas id="commentCanvas"></canvas>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
