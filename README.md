@@ -39,5 +39,5 @@
                     - /history 履歴の取得用
 ## 使用している技術スタック<br>
 クライアントWebアプリはFlutterを使用しています。ただしWeb以外でビルドしても(たぶん)動きません<br>
-配信用webアプリはPureJSです。<br>
+配信用WebアプリはPureJSです。<br>
 バックエンドにはRust+Axumを採用しました。<br>
