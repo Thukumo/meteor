@@ -2,14 +2,14 @@
 FROM dart:stable AS flutter_builder
 WORKDIR /app/client
 COPY client/ ./
-RUN apt-get update && apt-get install -y unzip xz-utils git curl && \
+RUN apt update && apt install -y unzip xz-utils git curl && \
     git clone https://github.com/flutter/flutter.git -b stable /flutter && \
     export PATH="$PATH:/flutter/bin" && \
     /flutter/bin/flutter pub get && \
     /flutter/bin/flutter build web
 
 # Build Rust server
-FROM rust:1.77 as rust_builder
+FROM rust:slim-bookworm as rust_builder
 WORKDIR /app/server
 COPY server/ ./
 RUN cargo build --release
@@ -20,5 +20,5 @@ WORKDIR /app
 COPY --from=rust_builder /app/server/target/release/server ./server
 COPY --from=flutter_builder /app/client/build/web ./static
 COPY stream/ ./static/stream
-EXPOSE 80
+EXPOSE 8080
 CMD ["./server"]
