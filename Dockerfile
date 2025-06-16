@@ -17,4 +17,4 @@ COPY --from=rust_builder /app/server/target/release/server ./server
 COPY --from=flutter_builder /app/client/build/web ./static
 COPY stream/ ./static/stream
 EXPOSE 8080
-CMD ["/app/server"]
+CMD ["./server"]
