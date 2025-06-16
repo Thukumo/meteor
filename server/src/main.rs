@@ -7,7 +7,7 @@ use tower_http::services::ServeDir;
 
 use crate::{handlers::{history_handler, ws_handler}, state::AppState};
 
-const SERVICE_PORT: u16 = 80;
+const SERVICE_PORT: u16 = 8080;
 
 #[tokio::main]
 async fn main() {
