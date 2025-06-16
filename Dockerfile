@@ -1,15 +1,8 @@
 # Build Flutter web client
-FROM dart:stable AS flutter_builder
+FROM ghcr.io/cirruslabs/flutter:latest AS flutter_builder
 WORKDIR /app/client
-RUN useradd -m flutteruser
 COPY client/ ./
-RUN apt update && apt install -y unzip xz-utils git curl
-RUN chown -R flutteruser:flutteruser /app/client
-USER flutteruser
-RUN git clone https://github.com/flutter/flutter.git -b stable /flutter && \
-    export PATH="$PATH:/flutter/bin" && \
-    /flutter/bin/flutter pub get && \
-    /flutter/bin/flutter build web
+RUN flutter pub get && flutter build web
 
 # Build Rust server
 FROM rust:slim-bookworm AS rust_builder
