@@ -7,10 +7,12 @@ use tower_http::services::ServeDir;
 
 use crate::{handlers::{history_handler, ws_handler}, state::AppState};
 
-const SERVICE_PORT: u16 = 80;
-
 #[tokio::main]
 async fn main() {
+    let port = std::env::var("PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(8080);
     let app = Router::new()
         .nest("/api", Router::new()
             .nest("/v1", Router::new()
@@ -23,6 +25,6 @@ async fn main() {
         )
         .fallback_service(get_service(ServeDir::new("static")))
         .with_state(Arc::new(AppState::new()));
-    let listener = tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], SERVICE_PORT))).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port))).await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
