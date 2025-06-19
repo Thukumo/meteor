@@ -8,12 +8,12 @@ RUN flutter pub get && flutter build web --release
 FROM rust:latest AS rust_builder
 WORKDIR /app/server
 COPY server/ ./
-RUN rustup target add x86_64-unknown-linux-musl && cargo build --release --target x86_64-unknown-linux-musl
+RUN cargo build --release
 
 # Final image
-FROM scratch
+FROM gcr.io/distroless/cc
 WORKDIR /app
-COPY --from=rust_builder /app/server/target/x86_64-unknown-linux-musl/release/server server
+COPY --from=rust_builder /app/server/target/release/server server
 COPY --from=flutter_builder /app/client/build/web static
 COPY stream/ static/stream
 EXPOSE 8080
