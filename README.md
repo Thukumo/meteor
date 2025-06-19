@@ -16,9 +16,10 @@
     6. 共有ボタンを押します
     7. 表示されるコメントのサイズを変更したい場合、ページをリロードしてメニュー最下部にある"フォントサイズ"で調整してください。
 - サーバ構築<br>
-    1. "client"フォルダで`flutter build web`
-    2. "server"フォルダのstaticに"client/build/web" 以下のファイルと、"stream"フォルダをコピーする
-    3. "server"フォルダで`cargo run -r` (Linuxでは、既定のポート設定(80)だと管理者権限が必要です)
+    1. `git clone https://github.com/thukumo/meteor`
+    2. `cd meteor`
+    3. `docker build . -t meteor`
+    4. `docker run -p 80:8080 meteor`
 ## bolideとの相異点
 - ルームに接続しているユーザーがいる限り、サーバのメモリ上にコメントの履歴が残るようにしました。<br>
 これにより、クライアントのリロードや再接続、ルームへの途中参加を行っても、自分が接続する前のコメントを読むことができます。<br>
