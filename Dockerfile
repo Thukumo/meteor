@@ -2,19 +2,19 @@
 FROM ghcr.io/cirruslabs/flutter:latest AS flutter_builder
 WORKDIR /app/client
 COPY client/ ./
-RUN flutter pub get && flutter build web
+RUN flutter pub get && flutter build web --release
 
 # Build Rust server
-FROM rust:slim-bookworm AS rust_builder
+FROM rust:latest AS rust_builder
 WORKDIR /app/server
 COPY server/ ./
-RUN cargo build --release
+RUN rustup target add x86_64-unknown-linux-musl && cargo build --release --target x86_64-unknown-linux-musl
 
 # Final image
-FROM debian:bookworm-slim
+FROM scratch
 WORKDIR /app
-COPY --from=rust_builder /app/server/target/release/server ./server
-COPY --from=flutter_builder /app/client/build/web ./static
-COPY stream/ ./static/stream
-#EXPOSE 8080
-CMD ["./server"]
+COPY --from=rust_builder /app/server/target/x86_64-unknown-linux-musl/release/server server
+COPY --from=flutter_builder /app/client/build/web static
+COPY stream/ static/stream
+EXPOSE 8080
+ENTRYPOINT ["./server"]
