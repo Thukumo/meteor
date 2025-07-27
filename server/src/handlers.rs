@@ -46,9 +46,9 @@ async fn socket_handler(socket: WebSocket, room: Room) {
             _ = &mut stop => None,
         } {
             match message {
-                Ok(Message::Text(text)) => {
-                    let _ = broadcaster.send(Message::Text(text.clone()));
-                    room.add_history(text).await;
+                Ok(text_message @ Message::Text(_)) => {
+                    let _ = broadcaster.send(text_message.clone());
+                    room.add_history(text_message.into_text().unwrap().to_string()).await;
                 }
                 Ok(Message::Close(_)) | Err(_) => { break }
                 _ => {} // pingとかは自動で応答してくれるらしい
