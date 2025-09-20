@@ -63,6 +63,17 @@ button:hover {
     background-color: #0056b3;
 }
 
+/* disabled 状態の見た目とカーソル */
+button:disabled,
+button[disabled] {
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+button:disabled:hover,
+button[disabled]:hover {
+    background-color: inherit;
+}
+
 .status-message {
     margin-top: 10px;
     font-weight: bold;

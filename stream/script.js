@@ -56,6 +56,7 @@ function setConnectionUI(state) {
             connectionStatus.className = 'status-message';
             connectButton.textContent = '接続中...';
             connectButton.style.backgroundColor = '#007bff';
+            connectButton.disabled = true;
             roomNameInput.disabled = false; // 接続試行中も編集可
             break;
         case 'connected':
@@ -63,6 +64,7 @@ function setConnectionUI(state) {
             connectionStatus.className = 'status-message connected';
             connectButton.textContent = '接続済';
             connectButton.style.backgroundColor = 'green';
+            connectButton.disabled = true;
             roomNameInput.disabled = false; // 接続中でも編集可
             break;
         case 'disconnected':
@@ -70,6 +72,7 @@ function setConnectionUI(state) {
             connectionStatus.className = 'status-message disconnected';
             connectButton.textContent = '接続開始';
             connectButton.style.backgroundColor = '#007bff';
+            connectButton.disabled = false;
             roomNameInput.disabled = false;
             break;
         case 'error':
@@ -77,6 +80,7 @@ function setConnectionUI(state) {
             connectionStatus.className = 'status-message error';
             connectButton.textContent = '再試行';
             connectButton.style.backgroundColor = '#007bff';
+            connectButton.disabled = false;
             roomNameInput.disabled = false;
             break;
         default:
@@ -84,6 +88,7 @@ function setConnectionUI(state) {
             connectionStatus.className = 'status-message';
             connectButton.textContent = '接続開始';
             connectButton.style.backgroundColor = '#007bff';
+            connectButton.disabled = false;
             roomNameInput.disabled = false;
     }
 }
@@ -219,26 +224,24 @@ async function startScreenShare() {
 }
 
 // ===================== イベントリスナー =====================
-connectButton.addEventListener('click', () => {
-    function attemptConnect() {
-        const roomName = roomNameInput.value.trim();
-        if (roomName === "") {
-            roomNameInput.style.backgroundColor = 'orange';
-            alert("部屋名を入力してください。");
-            return;
-        }
-        roomNameInput.style.backgroundColor = '';
-        connectWebSocket(roomName);
+function attemptConnect() {
+    const roomName = roomNameInput.value.trim();
+    if (roomName === "") {
+        roomNameInput.style.backgroundColor = 'orange';
+        alert("部屋名を入力してください。");
+        return;
     }
+    roomNameInput.style.backgroundColor = '';
+    connectWebSocket(roomName);
+}
 
-    connectButton.addEventListener('click', attemptConnect);
+connectButton.addEventListener('click', attemptConnect);
 
-    roomNameInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            attemptConnect();
-        }
-    });
+roomNameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        attemptConnect();
+    }
 });
 
 startScreenShareButton.addEventListener('click', startScreenShare);
