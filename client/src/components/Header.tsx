@@ -1,4 +1,5 @@
 import React from 'react'
+import { Link } from 'react-router-dom'
 import './Header.css'
 import type { ConnectionStatus } from '../types'
 
@@ -17,7 +18,11 @@ const statusLabels: Record<ConnectionStatus, string> = {
 export default function Header({ appName = 'Meteor', room, status = 'disconnected' }: Props) {
   return (
     <header className="app-header">
-      <div className="app-header-left">{appName}</div>
+      <div className="app-header-left">
+        <Link to="/" aria-label="ホームへ移動" style={{ color: 'inherit', textDecoration: 'none' }}>
+          {appName}
+        </Link>
+      </div>
       <div className="app-header-center">{room ? `ルーム ${room}` : ''}</div>
       <div className={`app-header-right status-${status}`} aria-live="polite">
         <span className="status-dot" />

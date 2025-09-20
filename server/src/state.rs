@@ -1,8 +1,15 @@
 #![allow(dead_code)]
-use std::{collections::{HashMap, VecDeque}, ops::Deref, sync::Arc};
+use std::{
+    collections::{HashMap, VecDeque},
+    ops::Deref,
+    sync::Arc,
+};
 
 use axum::extract::ws::Message;
-use tokio::{sync::{broadcast, RwLock}, task::JoinHandle};
+use tokio::{
+    sync::{RwLock, broadcast},
+    task::JoinHandle,
+};
 
 const MAX_HISTORY_SIZE: usize = 100;
 const REMOVE_AFTER: std::time::Duration = std::time::Duration::from_secs(60);
@@ -31,7 +38,10 @@ impl AppState {
     }
     pub async fn get_or_create_room(&self, name: &str) -> Room {
         let mut state_lock = self.write().await;
-        let room = state_lock.entry(name.to_string()).or_insert_with(|| self.new_room(name)).clone();
+        let room = state_lock
+            .entry(name.to_string())
+            .or_insert_with(|| self.new_room(name))
+            .clone();
         let room_clone = room.clone();
         let mut status = room_clone.status.write().await;
         if let RoomStatus::Inactive(token) = &*status {
@@ -88,10 +98,9 @@ impl Room {
                 // ルームを削除する
                 let room_name = self.name.clone();
                 let parent = self.parent.clone();
-                *status = RoomStatus::Inactive(
-                    tokio::spawn(async move {
-                        tokio::time::sleep(REMOVE_AFTER).await;
-                        parent.write().await.remove(&room_name);
+                *status = RoomStatus::Inactive(tokio::spawn(async move {
+                    tokio::time::sleep(REMOVE_AFTER).await;
+                    parent.write().await.remove(&room_name);
                 }));
             }
         }

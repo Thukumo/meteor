@@ -1,0 +1,8 @@
+node_modules
+client/node_modules
+client/dist
+server/target
+.git
+.gitignore
+**/.DS_Store
+**/Thumbs.db

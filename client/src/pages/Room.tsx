@@ -132,12 +132,7 @@ export default function Room({ setAppRoom, setAppStatus }: Props = {}) {
 
   function copyLink() {
     const origin = window.location.origin
-    // Copy a link that points to the root with a query parameter.
-    // Many simple servers return 404 for client-side routes like /room,
-    // so use /?room=... which `Home` handles and navigates into the SPA.
-    // Use raw room value so clipboard contains original characters (no percent-encoding).
-    // Note: if room contains characters like spaces, the resulting URL may not be valid
-    // as a single token; this matches the user's request to avoid percent-encoding.
+    // 共有用リンクは日本語をそのまま見せたいので今のところエンコードしない(後で変更するかも)
     const url = `${origin}/?room=${room}`
     navigator.clipboard.writeText(url).then(() => alert('ルームへのリンクをコピーしました'))
   }

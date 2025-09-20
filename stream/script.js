@@ -46,10 +46,11 @@ const yPosRandom = new CustomRandom(1000, 0, 10);
 // ===================== WebSocket接続 =====================
 function connectWebSocket(roomName) {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
-    ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/v1/room/${roomName}/ws`);
+    ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/v1/room/${encodeURIComponent(roomName)}/ws`);
     connectionStatus.textContent = "接続中...";
     connectionStatus.className = 'status-message';
     let reconnectTimeout = null;
+    let attempts = 0;
     ws.onopen = () => {
         connectionStatus.textContent = "接続済";
         connectionStatus.className = 'status-message connected';
@@ -71,9 +72,16 @@ function connectWebSocket(roomName) {
         connectButton.textContent = "接続終了済";
         connectButton.style.backgroundColor = 'blue';
         roomNameInput.disabled = false;
+        // Exponential backoff with jitter, up to 30s, max 10 attempts
+        attempts += 1;
+        if (attempts > 10) return;
+        const base = 500; // start at 0.5s
+        const expo = Math.min(base * Math.pow(2, attempts - 1), 30000);
+        const jitter = Math.random() * 300;
+        const delay = Math.floor(expo + jitter);
         reconnectTimeout = setTimeout(() => {
             connectWebSocket(roomName);
-        }, 200); // 200ミリ秒後に再接続を試みる
+        }, delay);
     };
     ws.onerror = (error) => {
         connectionStatus.textContent = "WebSocket接続エラー";

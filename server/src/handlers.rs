@@ -1,6 +1,12 @@
 use std::{collections::VecDeque, sync::Arc};
 
-use axum::{extract::{ws::{Message, WebSocket}, Path, State, WebSocketUpgrade}, response::Response};
+use axum::{
+    extract::{
+        Path, State, WebSocketUpgrade,
+        ws::{Message, WebSocket},
+    },
+    response::Response,
+};
 use futures_util::{SinkExt, StreamExt};
 use tokio::{sync::oneshot, time::timeout};
 
@@ -23,17 +29,21 @@ pub async fn ws_handler(
 
 async fn socket_handler(socket: WebSocket, room: Room) {
     let (mut ws_sender, mut ws_receiver) = socket.split();
-    let((recv_stop_tx, recv_stop_rx), (send_stop_tx, send_stop_rx)) = (oneshot::channel(), oneshot::channel());
+    let ((recv_stop_tx, recv_stop_rx), (send_stop_tx, send_stop_rx)) =
+        (oneshot::channel(), oneshot::channel());
     // broadcasterから送信されたメッセージを受信し、WebSocketの送信先に送る
     let (broadcaster, mut receiver) = room.get_tx_rx();
     let mut send_task = tokio::spawn(async move {
         let mut stop = recv_stop_rx;
-        while let Ok(message) = tokio::select!{
+        while let Ok(message) = tokio::select! {
             message = receiver.recv() => message,
             _ = &mut stop => Err(tokio::sync::broadcast::error::RecvError::Closed),
         } {
             // 設定した時間内にメッセージを送信できなかった場合、終了する
-            if timeout(WEBSOCKET_TIMEOUT, ws_sender.send(message)).await.is_err() {
+            if timeout(WEBSOCKET_TIMEOUT, ws_sender.send(message))
+                .await
+                .is_err()
+            {
                 break;
             }
         }
@@ -41,16 +51,17 @@ async fn socket_handler(socket: WebSocket, room: Room) {
     // クライアントからのメッセージ受信の処理
     let mut recv_task = tokio::spawn(async move {
         let mut stop = send_stop_rx;
-        while let Some(message) = tokio::select!{
+        while let Some(message) = tokio::select! {
             message = ws_receiver.next() => message,
             _ = &mut stop => None,
         } {
             match message {
                 Ok(text_message @ Message::Text(_)) => {
                     let _ = broadcaster.send(text_message.clone());
-                    room.add_history(text_message.into_text().unwrap().to_string()).await;
+                    room.add_history(text_message.into_text().unwrap().to_string())
+                        .await;
                 }
-                Ok(Message::Close(_)) | Err(_) => { break }
+                Ok(Message::Close(_)) | Err(_) => break,
                 _ => {} // pingとかは自動で応答してくれるらしい
             }
         }
@@ -69,13 +80,11 @@ pub async fn history_handler(
     Path(room_name): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> axum::Json<VecDeque<String>> {
-    axum::Json(
-        if let Some(room) = state.read().await.get(&room_name) {
-            room.get_history().await
-        } else {
-            VecDeque::new()
-        }
-    )
+    axum::Json(if let Some(room) = state.read().await.get(&room_name) {
+        room.get_history().await
+    } else {
+        VecDeque::with_capacity(0)
+    })
 }
 #[derive(serde::Serialize)]
 pub struct RoomInfo {
@@ -83,20 +92,16 @@ pub struct RoomInfo {
     pub connection: usize,
 }
 #[allow(dead_code)]
-pub async fn room_list_handler(
-    State(state): State<Arc<AppState>>,
-) -> axum::Json<Vec<RoomInfo>> {
-    axum::Json(
-        {
-            let room_map = state.read().await;
-            let mut vec = Vec::with_capacity(room_map.len());
-            for (name, room_data) in room_map.iter() {
-                vec.push(RoomInfo {
-                    name: name.clone(),
-                    connection: room_data.connection_count().await,
-                });
-            }
-            vec
+pub async fn room_list_handler(State(state): State<Arc<AppState>>) -> axum::Json<Vec<RoomInfo>> {
+    axum::Json({
+        let room_map = state.read().await;
+        let mut vec = Vec::with_capacity(room_map.len());
+        for (name, room_data) in room_map.iter() {
+            vec.push(RoomInfo {
+                name: name.clone(),
+                connection: room_data.connection_count().await,
+            });
         }
-    )
+        vec
+    })
 }

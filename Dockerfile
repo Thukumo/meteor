@@ -1,8 +1,10 @@
 # Build React web client
 FROM node:slim AS client_builder
 WORKDIR /app/client
+COPY client/package*.json ./
+RUN npm install --no-audit --no-fund
 COPY client/ ./
-RUN npm install && npm run build
+RUN npm run build
 
 # Build Rust server
 FROM rust:slim AS rust_builder
