@@ -4,7 +4,7 @@ WORKDIR /app/client
 COPY client/package*.json ./
 RUN npm install --no-audit --no-fund
 COPY client/ ./
-RUN npm run build
+RUN npm run lint && npm run build
 
 # Build Rust server
 FROM rust:slim AS rust_builder

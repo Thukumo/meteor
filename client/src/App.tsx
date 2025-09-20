@@ -4,16 +4,16 @@ import Header from './components/Header'
 import type { AppOutletContext, ConnectionStatus } from './types'
 
 export default function App() {
-  const [status, setStatus] = React.useState<ConnectionStatus>('disconnected')
+    const [status, setStatus] = React.useState<ConnectionStatus>('disconnected')
 
-  return (
-    <div className="app-shell">
-      <Header status={status} />
-      <div className="app-content">
-        <main className="app-main">
-          <Outlet context={{ setAppStatus: setStatus } satisfies AppOutletContext} />
-        </main>
-      </div>
-    </div>
-  )
+    return (
+        <div className="app-shell">
+            <Header status={status} />
+            <div className="app-content">
+                <main className="app-main">
+                    <Outlet context={{ setAppStatus: setStatus } satisfies AppOutletContext} />
+                </main>
+            </div>
+        </div>
+    )
 }
