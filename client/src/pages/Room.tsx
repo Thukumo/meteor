@@ -125,10 +125,15 @@ export default function Room({ setAppStatus }: Props = {}) {
     navigator.clipboard.writeText(url).then(() => alert('ルームへのリンクをコピーしました'))
   }
 
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    sendMessage()
+  }
+
   return (
     <div className="page-container">
       <h1 className="page-title">ルーム {room}</h1>
-      <button className="btn" onClick={copyLink}>リンクをコピー</button>
+  <button type="button" className="btn" onClick={copyLink}>リンクをコピー</button>
       <div ref={listRef} className="room-list">
         {loading ? (
           <div className="muted">読み込み中...</div>
@@ -140,13 +145,13 @@ export default function Room({ setAppStatus }: Props = {}) {
           history.map((h, i) => <div key={i} className="room-item">{h}</div>)
         )}
       </div>
-      <div className="compose">
+      <form className="compose" onSubmit={handleSubmit}>
         <textarea
           ref={inputRef}
           className="input compose-textarea"
-          placeholder="メッセージを入力 (Shift+Enterで改行、Enterで送信)"
+          placeholder="メッセージを入力 (Enterで改行、Ctrl+Enterで送信)"
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
               e.preventDefault()
               sendMessage()
             }
@@ -157,8 +162,8 @@ export default function Room({ setAppStatus }: Props = {}) {
             t.style.height = `${t.scrollHeight}px`
           }}
         />
-        <button className="btn" onClick={sendMessage} disabled={wsState !== 'connected'}>送信</button>
-      </div>
+        <button type="submit" className="btn" disabled={wsState !== 'connected'}>送信</button>
+      </form>
     </div>
   )
 }
