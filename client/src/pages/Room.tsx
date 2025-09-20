@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { useLoaderData, useLocation } from 'react-router-dom'
-import type { ConnectionStatus } from '../types'
+import { useLoaderData, useLocation, useOutletContext } from 'react-router-dom'
+import type { AppOutletContext, ConnectionStatus } from '../types'
 
 type Props = {
   setAppStatus?: (s: ConnectionStatus) => void
@@ -11,6 +11,7 @@ function useQuery() {
 }
 
 export default function Room({ setAppStatus }: Props = {}) {
+  const { setAppStatus: setStatusFromContext } = useOutletContext<AppOutletContext>()
   const query = useQuery()
   const room = query.get('room') || ''
   const initialHistory = useLoaderData() as string[]
@@ -42,7 +43,8 @@ export default function Room({ setAppStatus }: Props = {}) {
 
     function connectWs() {
       if (!shouldReconnectRef.current) return
-      setAppStatus && setAppStatus('connecting')
+  const set = setAppStatus || setStatusFromContext
+  set && set('connecting')
       setWsState('connecting')
       const ws = new WebSocket(`${wsOrigin}/api/v1/room/${encodeURIComponent(room)}/ws`)
       wsRef.current = ws
@@ -50,7 +52,7 @@ export default function Room({ setAppStatus }: Props = {}) {
       ws.addEventListener('open', () => {
         reconnectAttemptsRef.current = 0
         setError(null)
-        setAppStatus && setAppStatus('connected')
+  set && set('connected')
         setWsState('connected')
       })
 
@@ -61,7 +63,7 @@ export default function Room({ setAppStatus }: Props = {}) {
 
       ws.addEventListener('close', () => {
         if (!shouldReconnectRef.current) return
-        setAppStatus && setAppStatus('disconnected')
+  set && set('disconnected')
         setWsState('disconnected')
         // exponential backoff with jitter
         reconnectAttemptsRef.current += 1

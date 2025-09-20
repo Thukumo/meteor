@@ -1,7 +1,7 @@
 import React from 'react'
 import { Outlet } from 'react-router-dom'
 import Header from './components/Header'
-import type { ConnectionStatus } from './types'
+import type { AppOutletContext, ConnectionStatus } from './types'
 
 export default function App() {
   const [status, setStatus] = React.useState<ConnectionStatus>('disconnected')
@@ -11,7 +11,7 @@ export default function App() {
       <Header status={status} />
       <div className="app-content">
         <main className="app-main">
-          <Outlet />
+          <Outlet context={{ setAppStatus: setStatus } satisfies AppOutletContext} />
         </main>
       </div>
     </div>
