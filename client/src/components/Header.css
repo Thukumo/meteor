@@ -57,12 +57,19 @@
     flex: 1;
     display: flex;
     justify-content: center;
-    align-items: flex-start;
+    align-items: stretch; /* let .app-main stretch to full height */
     padding: 16px;
+    min-height: 0; /* allow children to shrink within viewport */
+    overflow: hidden; /* inner pages manage their own scroll */
 }
 .app-main {
     width: 100%;
     max-width: 900px;
+    min-height: 0; /* prevent content from forcing overflow */
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto; /* take available height */
+    overflow: hidden; /* delegate scrolling to inner sections */
 }
 .app-header-right .status-text {
     font-size: 12px;

@@ -22,12 +22,12 @@ export default function Room() {
     }
 
     return (
-        <div className="page-container">
+        <div className="page-container room-page">
             <h1 className="page-title">ルーム {room}</h1>
-            <button className="btn" onClick={copyLink}>
-                リンクをコピー
-            </button>
-            <div className="mt-8">
+            <div className="action-row">
+                <button className="btn" onClick={copyLink}>
+                    リンクをコピー
+                </button>
                 <button
                     className="btn"
                     type="button"
@@ -37,7 +37,7 @@ export default function Room() {
                     }}
                     aria-label="このルームで配信を開始"
                 >
-                    このルームで配信する（新しいタブが開きます）
+                    このルームで配信する（新しいタブ）
                 </button>
             </div>
             <div ref={listRef} className="room-list">

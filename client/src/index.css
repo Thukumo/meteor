@@ -115,3 +115,58 @@ a.btn {
 .mt-8 {
     margin-top: 8px;
 }
+
+/* Flex row for action buttons */
+.action-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 8px;
+}
+
+/* Room page flexible layout */
+.room-page {
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr) auto; /* title, actions, list, compose */
+    row-gap: 8px; /* unify vertical spacing between sections */
+    min-height: 0; /* allow grid to shrink inside flex parent */
+    flex: 1 1 auto; /* fill parent height provided by app-main */
+    overflow: hidden; /* only the list scrolls */
+}
+
+/* Reset vertical margins inside grid to prevent overflow pushing */
+.room-page .page-title,
+.room-page .action-row,
+.room-page .room-list,
+.room-page .compose {
+    margin-top: 0;
+}
+
+.room-page .page-title {
+    margin-bottom: 0;
+}
+
+.room-page .room-list {
+    min-height: 0; /* allow shrink inside grid area */
+    height: auto;
+    overflow: auto; /* scrolling happens here */
+}
+
+/* Compact compose area on Room page */
+.room-page .compose {
+    gap: 6px;
+}
+
+.room-page .compose-textarea {
+    min-height: 32px;
+    max-height: 120px;
+    padding: 6px 8px;
+    line-height: 1.25;
+    font-size: 14px;
+    overflow: auto;
+}
+
+.room-page .compose .btn {
+    padding: 6px 10px;
+}
