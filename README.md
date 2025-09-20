@@ -50,6 +50,6 @@
 
 ## 使用している技術スタック
 
-クライアントWebアプリはReact+TS+Viteを使用しています。
+クライアントWebアプリはReact+TS+Viteを使用しています。  
 配信用WebアプリはVanillaJSです。  
 バックエンドにはRust+Axumを採用しました。
