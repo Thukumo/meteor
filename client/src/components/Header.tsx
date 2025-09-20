@@ -10,7 +10,7 @@ type Props = {
 
 const statusLabels: Record<ConnectionStatus, string> = {
   connected: '接続済み',
-  connecting: '再接続中',
+  connecting: '接続中',
   disconnected: '切断'
 } as const
 
