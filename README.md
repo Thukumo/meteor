@@ -24,7 +24,8 @@
     1. `git clone https://github.com/thukumo/meteor`
     2. `cd meteor`
     3. `podman build -t meteor .`
-    4. `podman run -p 80:8080 meteor`
+    4. `podman run -p 80:8080 meteor`  
+    ポート番号は環境変数`PORT`で変更可能です。
 
 ## bolideとの相異点
 
