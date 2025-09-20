@@ -62,6 +62,8 @@ button:disabled {
 .room-item { 
   padding: 8px; 
   border-bottom: 1px solid #eee; 
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .room-item:last-child {
