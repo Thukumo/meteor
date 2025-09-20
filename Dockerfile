@@ -1,11 +1,11 @@
-# Build Flutter web client
-FROM ghcr.io/cirruslabs/flutter:latest AS flutter_builder
+# Build React web client
+FROM node:slim AS client_builder
 WORKDIR /app/client
 COPY client/ ./
-RUN flutter pub get && flutter build web --release
+RUN npm install && npm run build
 
 # Build Rust server
-FROM rust:latest AS rust_builder
+FROM rust:slim AS rust_builder
 WORKDIR /app/server
 COPY server/ ./
 RUN cargo build --release
@@ -14,7 +14,7 @@ RUN cargo build --release
 FROM gcr.io/distroless/cc
 WORKDIR /app
 COPY --from=rust_builder /app/server/target/release/server server
-COPY --from=flutter_builder /app/client/build/web static
+COPY --from=client_builder /app/client/dist static
 COPY stream/ static/stream
 EXPOSE 8080
 ENTRYPOINT ["./server"]
