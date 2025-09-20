@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { nanoid } from 'nanoid'
 import type { ConnectionStatus } from '../types'
 
+export type HistoryItem = { id: string; text: string }
+
 export type RoomHookState = {
-    history: string[]
+    history: HistoryItem[]
     wsState: ConnectionStatus
     loading: boolean
     error: string | null
@@ -20,7 +23,9 @@ export function useWebSocketRoom(
     initialHistory: string[],
     onStatus?: (s: ConnectionStatus) => void,
 ): RoomHookApi {
-    const [history, setHistory] = useState<string[]>(initialHistory ?? [])
+    const [history, setHistory] = useState<HistoryItem[]>(
+        (initialHistory ?? []).map((t) => ({ id: nanoid(), text: t })),
+    )
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [wsState, setWsState] = useState<ConnectionStatus>('disconnected')
@@ -60,7 +65,7 @@ export function useWebSocketRoom(
 
             ws.addEventListener('message', (ev: MessageEvent<string>) => {
                 const data = typeof ev.data === 'string' ? ev.data : String(ev.data)
-                setHistory((h) => [...h, data])
+                setHistory((h) => [...h, { id: nanoid(), text: data }])
                 // Only auto-scroll if the user is already near the bottom.
                 // This prevents interrupting the user's manual scroll position.
                 setTimeout(() => {

@@ -75,7 +75,7 @@ export default function Room() {
         <div className="page-container room-page">
             <h1 className="page-title">ルーム {room}</h1>
             <div className="action-row">
-                <button className="btn" onClick={copyLink}>
+                <button className="btn" type="button" onClick={copyLink}>
                     リンクをコピー
                 </button>
                 <button
@@ -105,9 +105,9 @@ export default function Room() {
                     ) : history.length === 0 ? (
                         <div className="muted">履歴がありません</div>
                     ) : (
-                        history.map((h, i) => (
-                            <div key={i} className="room-item">
-                                {h}
+                        history.map((item) => (
+                            <div key={item.id} className="room-item">
+                                {item.text}
                             </div>
                         ))
                     )}
@@ -164,6 +164,7 @@ export default function Room() {
                     }}
                 />
                 <button
+                    type="button"
                     className="btn"
                     onClick={() => {
                         const el = document.querySelector<HTMLTextAreaElement>('.compose-textarea')
