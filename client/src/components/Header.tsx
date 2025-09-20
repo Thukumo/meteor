@@ -29,7 +29,6 @@ export default function Header({ appName = 'Meteor', status = 'disconnected' }: 
           {appName}
         </Link>
       </div>
-      <div className="app-header-center">{room ? `ルーム ${room}` : ''}</div>
       <div className={`app-header-right status-${status}`} aria-live="polite">
         <span className="status-dot" />
         <span className="status-text">{statusLabels[status]}</span>
