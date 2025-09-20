@@ -1,3 +1,5 @@
+/* Minimal route error message styling */
+.route-error { padding: 16px; color: #b00020; }
 /* Global styles */
 body { 
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; 

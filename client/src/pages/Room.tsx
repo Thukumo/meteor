@@ -1,9 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLoaderData, useLocation } from 'react-router-dom'
 import type { ConnectionStatus } from '../types'
 
 type Props = {
-  setAppRoom?: (r?: string) => void
   setAppStatus?: (s: ConnectionStatus) => void
 }
 
@@ -11,10 +10,11 @@ function useQuery() {
   return new URLSearchParams(useLocation().search)
 }
 
-export default function Room({ setAppRoom, setAppStatus }: Props = {}) {
+export default function Room({ setAppStatus }: Props = {}) {
   const query = useQuery()
   const room = query.get('room') || ''
-  const [history, setHistory] = useState<string[]>([])
+  const initialHistory = useLoaderData() as string[]
+  const [history, setHistory] = useState<string[]>(initialHistory ?? [])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [wsState, setWsState] = useState<ConnectionStatus>('disconnected')
@@ -28,28 +28,13 @@ export default function Room({ setAppRoom, setAppStatus }: Props = {}) {
   useEffect(() => {
     if (!room) return
 
-    // tell app which room we're in
-    setAppRoom && setAppRoom(room)
-
     shouldReconnectRef.current = true
 
-    async function load() {
-      setLoading(true)
-      setError(null)
-      try {
-        const origin = window.location.origin
-        const res = await fetch(`${origin}/api/v1/room/${encodeURIComponent(room)}/history`)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data: string[] = await res.json()
-        setHistory(data)
-        setLoading(false)
-        setTimeout(() => listRef.current?.scrollTo(0, listRef.current.scrollHeight), 50)
-      } catch (e: unknown) {
-        setLoading(false)
-        setError(e instanceof Error ? e.message : 'Unknown error')
-      }
-    }
-    load()
+    const ac = new AbortController()
+
+    // 初期履歴はloaderから供給済み
+    setLoading(false)
+    setTimeout(() => listRef.current?.scrollTo(0, listRef.current.scrollHeight), 50)
 
     const origin = window.location.origin
     const wsScheme = origin.startsWith('https') ? 'wss' : 'ws'
@@ -108,6 +93,7 @@ export default function Room({ setAppRoom, setAppStatus }: Props = {}) {
     connectWs()
 
     return () => {
+      ac.abort()
       shouldReconnectRef.current = false
       if (reconnectTimeoutRef.current) window.clearTimeout(reconnectTimeoutRef.current)
       wsRef.current?.close()

@@ -1,11 +1,10 @@
 import React from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import './Header.css'
 import type { ConnectionStatus } from '../types'
 
 type Props = {
   appName?: string
-  room?: string
   status?: ConnectionStatus
 }
 
@@ -15,7 +14,14 @@ const statusLabels: Record<ConnectionStatus, string> = {
   disconnected: '切断'
 } as const
 
-export default function Header({ appName = 'Meteor', room, status = 'disconnected' }: Props) {
+export default function Header({ appName = 'Meteor', status = 'disconnected' }: Props) {
+  const location = useLocation()
+  let room: string | undefined
+  if (location.pathname === '/room') {
+    const params = new URLSearchParams(location.search)
+    const r = params.get('room')
+    room = r && r.length > 0 ? r : undefined
+  }
   return (
     <header className="app-header">
       <div className="app-header-left">
