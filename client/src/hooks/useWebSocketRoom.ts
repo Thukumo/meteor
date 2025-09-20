@@ -61,9 +61,16 @@ export function useWebSocketRoom(
             ws.addEventListener('message', (ev: MessageEvent<string>) => {
                 const data = typeof ev.data === 'string' ? ev.data : String(ev.data)
                 setHistory((h) => [...h, data])
+                // Only auto-scroll if the user is already near the bottom.
+                // This prevents interrupting the user's manual scroll position.
                 setTimeout(() => {
                     const el = listEl.current
-                    el?.scrollTo(0, el.scrollHeight)
+                    if (!el) return
+                    const threshold = 48 // pixels from bottom to still consider "at bottom"
+                    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - threshold
+                    if (atBottom) {
+                        el.scrollTo(0, el.scrollHeight)
+                    }
                 }, 50)
             })
 

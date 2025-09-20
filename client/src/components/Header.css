@@ -51,7 +51,7 @@
 .app-shell {
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    height: 100dvh; /* lock to viewport height so inner scroll works */
 }
 .app-content {
     flex: 1;

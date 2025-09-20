@@ -15,6 +15,12 @@ body {
     margin: 0;
 }
 
+html,
+body {
+    height: 100%;
+    overflow: hidden; /* lock page scroll; use inner scrollers */
+}
+
 /* Common form elements */
 input,
 textarea {
@@ -71,8 +77,6 @@ a.btn {
 
 /* Message/Room list */
 .room-list {
-    height: 400px;
-    overflow: auto;
     border: 1px solid #ccc;
     border-radius: 8px;
     margin-top: 8px;
@@ -127,10 +131,10 @@ a.btn {
 
 /* Room page flexible layout */
 .room-page {
-    display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr) auto; /* title, actions, list, compose */
-    row-gap: 8px; /* unify vertical spacing between sections */
-    min-height: 0; /* allow grid to shrink inside flex parent */
+    display: flex;
+    flex-direction: column;
+    gap: 8px; /* unify vertical spacing between sections */
+    min-height: 0; /* allow shrink inside flex parent */
     flex: 1 1 auto; /* fill parent height provided by app-main */
     overflow: hidden; /* only the list scrolls */
 }
@@ -147,10 +151,21 @@ a.btn {
     margin-bottom: 0;
 }
 
+.room-page .room-list-wrap {
+    position: relative; /* anchor floating controls */
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
 .room-page .room-list {
-    min-height: 0; /* allow shrink inside grid area */
-    height: auto;
+    height: 100%;
     overflow: auto; /* scrolling happens here */
+}
+
+/* Invisible sentinel used for IntersectionObserver at list end */
+.list-sentinel {
+    height: 1px;
+    pointer-events: none;
 }
 
 /* Compact compose area on Room page */
@@ -169,4 +184,57 @@ a.btn {
 
 .room-page .compose .btn {
     padding: 6px 10px;
+}
+
+/* Floating "scroll to bottom" button inside room list */
+.scroll-to-bottom {
+    position: absolute; /* overlay within wrap */
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    min-width: 44px;
+    min-height: 44px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: #0d6efd;
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+    opacity: 0;
+    transform: translateY(6px);
+    pointer-events: none;
+    transition:
+        transform 0.18s ease,
+        opacity 0.18s ease,
+        background 0.2s ease;
+}
+
+.scroll-to-bottom:hover {
+    background: #0b5ed7;
+    transform: translateY(-1px);
+}
+
+.scroll-to-bottom.is-visible {
+    opacity: 0.95;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .scroll-to-bottom {
+        transition: none;
+        transform: none;
+    }
+}
+
+/* Keyboard focus visibility for the floating button */
+.scroll-to-bottom:focus-visible {
+    outline: 3px solid rgba(13, 110, 253, 0.6);
+    outline-offset: 2px;
+    box-shadow:
+        0 0 0 4px rgba(13, 110, 253, 0.25),
+        0 4px 14px rgba(0, 0, 0, 0.25);
 }
