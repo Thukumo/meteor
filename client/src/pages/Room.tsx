@@ -27,6 +27,19 @@ export default function Room() {
             <button className="btn" onClick={copyLink}>
                 リンクをコピー
             </button>
+            <div className="mt-8">
+                <button
+                    className="btn"
+                    type="button"
+                    onClick={() => {
+                        const url = `/stream/?room=${encodeURIComponent(room)}`
+                        window.open(url, '_blank', 'noopener,noreferrer')
+                    }}
+                    aria-label="このルームで配信を開始"
+                >
+                    このルームで配信する（新しいタブが開きます）
+                </button>
+            </div>
             <div ref={listRef} className="room-list">
                 {loading ? (
                     <div className="muted">読み込み中...</div>

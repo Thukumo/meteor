@@ -62,6 +62,13 @@ button:disabled {
     padding: 8px 12px;
 }
 
+/* Anchor variant of button */
+a.btn {
+    display: inline-block;
+    text-decoration: none;
+    text-align: center;
+}
+
 /* Message/Room list */
 .room-list {
     height: 400px;
@@ -102,4 +109,9 @@ button:disabled {
 
 .error {
     color: #c00;
+}
+
+/* spacing utilities */
+.mt-8 {
+    margin-top: 8px;
 }

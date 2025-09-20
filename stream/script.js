@@ -195,4 +195,18 @@ document.addEventListener('DOMContentLoaded', () => {
     commentCanvas.width = window.innerWidth;
     commentCanvas.height = window.innerHeight;
     fontSizeDisplay.textContent = fontSizeSlider.value + 'px';
+    try {
+        const params = new URLSearchParams(window.location.search);
+        const room = params.get('room');
+        if (room) {
+            const name = room.trim();
+            if (name !== '') {
+                roomNameInput.value = name;
+                roomNameInput.style.backgroundColor = '';
+                connectWebSocket(name);
+            }
+        }
+    } catch (_) {
+        // ignore
+    }
 });
