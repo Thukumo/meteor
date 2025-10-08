@@ -6,11 +6,7 @@ use axum::{
     Router,
     routing::{get, get_service},
 };
-use tower_http::{
-    CompressionLevel,
-    compression::CompressionLayer,
-    services::{ServeDir, ServeFile},
-};
+use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
     handlers::{history_handler, ws_handler},
@@ -36,8 +32,7 @@ async fn main() {
         .fallback_service(get_service(
             ServeDir::new("static").not_found_service(ServeFile::new("static/index.html")),
         ))
-        .with_state(Arc::new(AppState::new()))
-        .layer(CompressionLayer::new().quality(CompressionLevel::Best));
+        .with_state(Arc::new(AppState::new()));
 
     let port: u16 = std::env::var("PORT")
         .ok()
