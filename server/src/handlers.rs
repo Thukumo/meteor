@@ -80,11 +80,7 @@ pub async fn history_handler(
     Path(room_name): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> axum::Json<VecDeque<String>> {
-    axum::Json(if let Some(room) = state.read().await.get(&room_name) {
-        room.get_history().await
-    } else {
-        VecDeque::with_capacity(0)
-    })
+    axum::Json(state.get_room(&room_name).await.unwrap_or_default())
 }
 #[derive(serde::Serialize)]
 pub struct RoomInfo {
@@ -93,15 +89,5 @@ pub struct RoomInfo {
 }
 #[allow(dead_code)]
 pub async fn room_list_handler(State(state): State<Arc<AppState>>) -> axum::Json<Vec<RoomInfo>> {
-    axum::Json({
-        let room_map = state.read().await;
-        let mut vec = Vec::with_capacity(room_map.len());
-        for (name, room_data) in room_map.iter() {
-            vec.push(RoomInfo {
-                name: name.clone(),
-                connection: room_data.connection_count().await,
-            });
-        }
-        vec
-    })
+    axum::Json(state.get_room_list().await)
 }

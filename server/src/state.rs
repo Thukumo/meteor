@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 use std::{
     collections::{HashMap, VecDeque},
-    ops::Deref,
     sync::Arc,
 };
 
@@ -11,17 +10,14 @@ use tokio::{
     task::JoinHandle,
 };
 
+use crate::handlers::RoomInfo;
+
 const MAX_HISTORY_SIZE: usize = 100;
 const REMOVE_AFTER: std::time::Duration = std::time::Duration::from_secs(60);
 
 #[derive(Clone, Default)]
 pub struct AppState(Arc<RwLock<HashMap<String, Room>>>);
-impl Deref for AppState {
-    type Target = Arc<RwLock<HashMap<String, Room>>>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
+
 impl AppState {
     pub fn new() -> Self {
         AppState::default()
@@ -37,7 +33,7 @@ impl AppState {
         }
     }
     pub async fn get_or_create_room(&self, name: &str) -> Room {
-        let mut state_lock = self.write().await;
+        let mut state_lock = self.0.write().await;
         let room = state_lock
             .entry(name.to_string())
             .or_insert_with(|| self.new_room(name))
@@ -49,6 +45,27 @@ impl AppState {
             *status = RoomStatus::Active(0);
         }
         room
+    }
+    pub async fn get_room_list(&self) -> Vec<RoomInfo> {
+        let map = self.0.read().await;
+        let mut vec = Vec::with_capacity(map.len());
+        for (name, room) in map.iter() {
+            vec.push(RoomInfo {
+                name: name.clone(),
+                connection: room.connection_count().await,
+            });
+        }
+        vec
+    }
+    pub async fn get_room(&self, name: &str) -> Option<VecDeque<String>> {
+        Some(
+            {
+                let map = self.0.read().await;
+                map.get(name)?.clone()
+            }
+            .get_history()
+            .await,
+        )
     }
 }
 
@@ -100,7 +117,7 @@ impl Room {
                 let parent = self.parent.clone();
                 *status = RoomStatus::Inactive(tokio::spawn(async move {
                     tokio::time::sleep(REMOVE_AFTER).await;
-                    parent.write().await.remove(&room_name);
+                    parent.0.write().await.remove(&room_name);
                 }));
             }
         }
