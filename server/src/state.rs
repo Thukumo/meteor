@@ -138,6 +138,7 @@ impl Room {
                         tokio::time::sleep(REMOVE_AFTER).await;
                         if let Some(parent) = parent.upgrade() {
                             parent.write().await.remove(&room_name);
+                            info!("ルーム \"{}\"が削除されました。", room_name);
                         }
                     });
                     info!(

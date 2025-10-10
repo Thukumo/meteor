@@ -16,6 +16,7 @@ RUN mkdir src && \
     echo "fn main() {}" > src/main.rs && \
     cargo build --release
 
+# touchすることで、上で置いたmain.rsよりも新しいタイムスタンプにする
 COPY server/src ./src
 RUN find src -type f -exec touch {} + && \
     cargo build --release
