@@ -36,8 +36,10 @@ impl AppState {
         }
     }
     pub async fn get_or_create_room(&self, name: &str) -> Room {
-        let mut state_lock = self.0.write().await;
-        let room = state_lock
+        let room = self
+            .0
+            .write()
+            .await
             .entry(name.to_string())
             .or_insert_with(|| self.new_room(name))
             .clone();
