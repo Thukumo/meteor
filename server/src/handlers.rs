@@ -8,6 +8,7 @@ use axum::{
     response::Response,
 };
 use futures_util::{SinkExt, StreamExt};
+use log::warn;
 use tokio::{sync::oneshot, time::timeout};
 
 use crate::state::{AppState, Room};
@@ -44,6 +45,7 @@ async fn socket_handler(socket: WebSocket, room: Room) {
                 .await
                 .is_err()
             {
+                warn!("WebSocketのメッセージ送信に失敗しました。");
                 break;
             }
         }

@@ -7,15 +7,22 @@ COPY client/ ./
 RUN npm run lint && npm run build
 
 # Build Rust server
-FROM rust:slim AS rust_builder
+FROM rust:slim AS server_builder
 WORKDIR /app/server
+
+# 依存しているクレートを事前にビルドしておく(キャッシュ)
+COPY server/Cargo.toml server/Cargo.lock ./
+RUN mkdir src && \
+    echo "fn main() {}" > src/main.rs && \
+    cargo build --release
+
 COPY server/ ./
 RUN cargo build --release
 
 # Final image
 FROM gcr.io/distroless/cc
 WORKDIR /app
-COPY --from=rust_builder /app/server/target/release/server server
+COPY --from=server_builder /app/server/target/release/server server
 COPY --from=client_builder /app/client/dist static
 COPY stream/ static/stream
 EXPOSE 8080

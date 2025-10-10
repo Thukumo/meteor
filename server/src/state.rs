@@ -5,6 +5,7 @@ use std::{
 };
 
 use axum::extract::ws::Message;
+use log::{info, warn};
 use tokio::{
     sync::{RwLock, broadcast},
     task::JoinHandle,
@@ -15,8 +16,9 @@ use crate::handlers::RoomInfo;
 const MAX_HISTORY_SIZE: usize = 100;
 const REMOVE_AFTER: std::time::Duration = std::time::Duration::from_secs(60);
 
+type AppStateInner = RwLock<HashMap<String, Room>>;
 #[derive(Clone, Default)]
-pub struct AppState(Arc<RwLock<HashMap<String, Room>>>);
+pub struct AppState(Arc<AppStateInner>);
 
 impl AppState {
     pub fn new() -> Self {
@@ -24,12 +26,13 @@ impl AppState {
     }
     pub fn new_room(&self, name: &str) -> Room {
         let (broadcaster, _) = broadcast::channel(MAX_HISTORY_SIZE);
+        info!("ルーム \"{}\"を作成しました。", name);
         Room {
             name: name.to_string(),
             status: Arc::new(RwLock::new(RoomStatus::Active(0))),
             history: Arc::new(RwLock::new(VecDeque::with_capacity(MAX_HISTORY_SIZE))),
             broadcaster,
-            parent: Arc::new(self.clone()),
+            parent: Arc::downgrade(&self.0),
         }
     }
     pub async fn get_or_create_room(&self, name: &str) -> Room {
@@ -39,15 +42,17 @@ impl AppState {
             .or_insert_with(|| self.new_room(name))
             .clone();
         let room_clone = room.clone();
-        let mut status = room_clone.status.write().await;
-        if let RoomStatus::Inactive(token) = &*status {
-            token.abort();
+        let mut status: tokio::sync::RwLockWriteGuard<'_, RoomStatus> =
+            room_clone.status.write().await;
+        if let RoomStatus::Inactive(handle) = &*status {
+            handle.abort();
             *status = RoomStatus::Active(0);
+            info!("ルーム \"{}\"は再アクティブ化されました。", name);
         }
         room
     }
     pub async fn get_room_list(&self) -> Vec<RoomInfo> {
-        let map = self.0.read().await;
+        let map = self.0.read().await.clone();
         let mut vec = Vec::with_capacity(map.len());
         for (name, room) in map.iter() {
             vec.push(RoomInfo {
@@ -75,7 +80,7 @@ pub struct Room {
     status: Arc<RwLock<RoomStatus>>,
     history: Arc<RwLock<VecDeque<String>>>,
     broadcaster: broadcast::Sender<Message>,
-    parent: Arc<AppState>,
+    parent: std::sync::Weak<AppStateInner>,
 }
 impl Room {
     pub async fn add_history(&self, message: String) {
@@ -104,21 +109,55 @@ impl Room {
     pub async fn increment_connection(&self) {
         let mut status = self.status.write().await;
         if let RoomStatus::Active(count) = &*status {
+            info!(
+                "ルーム \"{}\"のコネクション数がインクリメントされました。({}→{})",
+                self.name,
+                count,
+                count + 1
+            );
             *status = RoomStatus::Active(count + 1);
         }
     }
     pub async fn decrement_connection_and_check(&self) {
+        use RoomStatus::*;
         let mut status = self.status.write().await;
-        if let RoomStatus::Active(count) = *status {
-            *status = RoomStatus::Active(count - 1);
-            if count == 1 {
-                // ルームを削除する
-                let room_name = self.name.clone();
-                let parent = self.parent.clone();
-                *status = RoomStatus::Inactive(tokio::spawn(async move {
-                    tokio::time::sleep(REMOVE_AFTER).await;
-                    parent.0.write().await.remove(&room_name);
-                }));
+        match &*status {
+            Active(count) => {
+                if *count == 0 {
+                    warn!(
+                        "コネクション数のカウントが0であるルーム \"{}\"のカウントをデクリメントしようとしました。",
+                        self.name
+                    );
+                    return;
+                }
+                let new_count = *count - 1;
+                if new_count == 0 {
+                    let room_name = self.name.clone();
+                    let parent = self.parent.clone();
+                    let handle = tokio::spawn(async move {
+                        tokio::time::sleep(REMOVE_AFTER).await;
+                        if let Some(parent) = parent.upgrade() {
+                            parent.write().await.remove(&room_name);
+                        }
+                    });
+                    info!(
+                        "ルーム \"{}\"の接続数がデクリメントされ、削除待機状態に移行しました。({}→{})",
+                        self.name, count, new_count
+                    );
+                    *status = Inactive(handle);
+                } else {
+                    info!(
+                        "ルーム \"{}\"の接続数がデクリメントされました。({}→{})",
+                        self.name, count, new_count
+                    );
+                    *status = Active(new_count);
+                }
+            }
+            Inactive(_) => {
+                warn!(
+                    "既に削除待機中であるルーム \"{}\"に対してカウントのデクリメントを試行しました。",
+                    self.name
+                );
             }
         }
     }

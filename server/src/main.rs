@@ -6,6 +6,8 @@ use axum::{
     Router,
     routing::{get, get_service},
 };
+use env_logger::Env;
+use log::info;
 use tower_http::services::{ServeDir, ServeFile};
 
 use crate::{
@@ -15,6 +17,8 @@ use crate::{
 
 #[tokio::main]
 async fn main() {
+    env_logger::Builder::from_env(Env::default().default_filter_or("info"))
+        .init();
     let app = Router::new()
         .route("/healthz", get(|| async { "ok" }))
         .nest(
@@ -38,6 +42,7 @@ async fn main() {
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(8080);
+    info!("Listening on port {}", port);
     let listener = tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port)))
         .await
         .unwrap();
