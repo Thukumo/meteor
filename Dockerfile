@@ -16,8 +16,9 @@ RUN mkdir src && \
     echo "fn main() {}" > src/main.rs && \
     cargo build --release
 
-COPY server/ ./
-RUN cargo build --release
+COPY server/src ./src
+RUN find src -type f -exec touch {} + && \
+    cargo build --release
 
 # Final image
 FROM gcr.io/distroless/cc
