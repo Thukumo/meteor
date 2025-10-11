@@ -17,7 +17,7 @@ const MAX_HISTORY_SIZE: usize = 100;
 const REMOVE_AFTER: std::time::Duration = std::time::Duration::from_secs(60);
 
 type AppStateInner = RwLock<HashMap<String, Room>>;
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct AppState(Arc<AppStateInner>);
 
 impl AppState {
@@ -77,7 +77,7 @@ impl AppState {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Room {
     name: String,
     status: Arc<RwLock<RoomStatus>>,
@@ -170,6 +170,7 @@ impl Room {
     }
 }
 
+#[derive(Debug)]
 enum RoomStatus {
     Active(usize),
     Inactive(JoinHandle<()>),

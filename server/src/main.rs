@@ -6,9 +6,10 @@ use axum::{
     Router,
     routing::{get, get_service},
 };
-use env_logger::Env;
 use log::info;
+use tokio::signal::unix;
 use tower_http::services::{ServeDir, ServeFile};
+use tracing_subscriber::prelude::*;
 
 use crate::{
     handlers::{history_handler, ws_handler},
@@ -17,7 +18,13 @@ use crate::{
 
 #[tokio::main]
 async fn main() {
-    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "debug".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
     let app = Router::new()
         .route("/healthz", get(|| async { "ok" }))
         .nest(
@@ -35,7 +42,8 @@ async fn main() {
         .fallback_service(get_service(
             ServeDir::new("static").not_found_service(ServeFile::new("static/index.html")),
         ))
-        .with_state(Arc::new(AppState::new()));
+        .with_state(Arc::new(AppState::new()))
+        .layer(tower_http::trace::TraceLayer::new_for_http());
 
     let port: u16 = std::env::var("PORT")
         .ok()
@@ -45,5 +53,14 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind(SocketAddr::from(([0, 0, 0, 0], port)))
         .await
         .unwrap();
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async {
+            unix::signal(unix::SignalKind::terminate())
+                .unwrap()
+                .recv()
+                .await
+                .unwrap()
+        })
+        .await
+        .unwrap();
 }

@@ -15,6 +15,7 @@ use crate::state::{AppState, Room};
 
 const WEBSOCKET_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
 
+#[tracing::instrument]
 pub async fn ws_handler(
     Path(room_name): Path<String>,
     State(state): State<Arc<crate::state::AppState>>,
@@ -28,6 +29,7 @@ pub async fn ws_handler(
     })
 }
 
+#[tracing::instrument]
 async fn socket_handler(socket: WebSocket, room: Room) {
     let (mut ws_sender, mut ws_receiver) = socket.split();
     let ((recv_stop_tx, recv_stop_rx), (send_stop_tx, send_stop_rx)) =
