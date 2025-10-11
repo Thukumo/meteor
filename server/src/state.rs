@@ -111,13 +111,22 @@ impl Room {
     pub async fn increment_connection(&self) {
         let mut status = self.status.write().await;
         if let RoomStatus::Active(count) = &*status {
-            info!(
-                "ルーム \"{}\"のコネクション数がインクリメントされました。({}→{})",
-                self.name,
-                count,
-                count + 1
-            );
-            *status = RoomStatus::Active(count + 1);
+            // 書いたはいいけどこれ要ります?
+            if *count == usize::MAX {
+                warn!(
+                    "コネクション数のカウントがusize::MAX({})であるルーム\"{}\"のカウントをインクリメントしようとしました。",
+                    usize::MAX,
+                    self.name
+                );
+            } else {
+                info!(
+                    "ルーム \"{}\"のコネクション数がインクリメントされました。({}→{})",
+                    self.name,
+                    count,
+                    count + 1
+                );
+                *status = RoomStatus::Active(count + 1);
+            }
         }
     }
     pub async fn decrement_connection_and_check(&self) {
@@ -130,10 +139,7 @@ impl Room {
                         "コネクション数のカウントが0であるルーム \"{}\"のカウントをデクリメントしようとしました。",
                         self.name
                     );
-                    return;
-                }
-                let new_count = *count - 1;
-                if new_count == 0 {
+                } else if *count == 1 {
                     let room_name = self.name.clone();
                     let parent = self.parent.clone();
                     let handle = tokio::spawn(async move {
@@ -145,15 +151,19 @@ impl Room {
                     });
                     info!(
                         "ルーム \"{}\"の接続数がデクリメントされ、削除待機状態に移行しました。({}→{})",
-                        self.name, count, new_count
+                        self.name,
+                        count,
+                        count - 1
                     );
                     *status = Inactive(handle);
                 } else {
                     info!(
                         "ルーム \"{}\"の接続数がデクリメントされました。({}→{})",
-                        self.name, count, new_count
+                        self.name,
+                        count,
+                        count - 1
                     );
-                    *status = Active(new_count);
+                    *status = Active(count - 1);
                 }
             }
             Inactive(_) => {
