@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 use std::{
     collections::{HashMap, VecDeque},
-    sync::Arc,
+    sync::{Arc, Weak},
 };
 
 use axum::extract::ws::Message;
-use log::{info, warn};
+use log::{debug, info, warn};
 use tokio::{
     sync::{RwLock, broadcast},
     task::JoinHandle,
@@ -44,8 +44,7 @@ impl AppState {
             .or_insert_with(|| self.new_room(name))
             .clone();
         let room_clone = room.clone();
-        let mut status: tokio::sync::RwLockWriteGuard<'_, RoomStatus> =
-            room_clone.status.write().await;
+        let mut status = room_clone.status.write().await;
         if let RoomStatus::Inactive(handle) = &*status {
             handle.abort();
             *status = RoomStatus::Active(0);
@@ -54,15 +53,20 @@ impl AppState {
         room
     }
     pub async fn get_room_list(&self) -> Vec<RoomInfo> {
-        let map = self.0.read().await.clone();
-        let mut vec = Vec::with_capacity(map.len());
-        for (name, room) in map.iter() {
-            vec.push(RoomInfo {
-                name: name.clone(),
+        let vec: Vec<_> = {
+            let map = self.0.read().await;
+            map.iter()
+                .map(|(name, room)| (name.clone(), room.clone()))
+                .collect()
+        };
+        let mut res = Vec::with_capacity(vec.len());
+        for (name, room) in vec.into_iter() {
+            res.push(RoomInfo {
+                name,
                 connection: room.connection_count().await,
             });
         }
-        vec
+        res
     }
     pub async fn get_room(&self, name: &str) -> Option<VecDeque<String>> {
         Some(
@@ -82,7 +86,7 @@ pub struct Room {
     status: Arc<RwLock<RoomStatus>>,
     history: Arc<RwLock<VecDeque<String>>>,
     broadcaster: broadcast::Sender<Message>,
-    parent: std::sync::Weak<AppStateInner>,
+    parent: Weak<AppStateInner>,
 }
 impl Room {
     pub async fn add_history(&self, message: String) {
@@ -119,7 +123,7 @@ impl Room {
                     self.name
                 );
             } else {
-                info!(
+                debug!(
                     "ルーム \"{}\"のコネクション数がインクリメントされました。({}→{})",
                     self.name,
                     count,
@@ -157,7 +161,7 @@ impl Room {
                     );
                     *status = Inactive(handle);
                 } else {
-                    info!(
+                    debug!(
                         "ルーム \"{}\"の接続数がデクリメントされました。({}→{})",
                         self.name,
                         count,
