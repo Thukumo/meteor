@@ -56,27 +56,24 @@ impl AppState {
         let vec: Vec<_> = {
             let map = self.0.read().await;
             map.iter()
-                .map(|(name, room)| (name.clone(), room.clone()))
+                .map(|(name, room)| (name.clone(), room.status.clone()))
                 .collect()
         };
         let mut res = Vec::with_capacity(vec.len());
-        for (name, room) in vec.into_iter() {
+        for (name, status) in vec.into_iter() {
             res.push(RoomInfo {
                 name,
-                connection: room.connection_count().await,
+                connection: match *status.read().await {
+                    RoomStatus::Active(count) => count,
+                    RoomStatus::Inactive(_) => 0,
+                },
             });
         }
         res
     }
     pub async fn get_room(&self, name: &str) -> Option<VecDeque<String>> {
-        Some(
-            {
-                let map = self.0.read().await;
-                map.get(name)?.clone()
-            }
-            .get_history()
-            .await,
-        )
+        let room = self.0.read().await.get(name)?.clone();
+        Some(room.get_history().await)
     }
 }
 
@@ -104,13 +101,6 @@ impl Room {
     }
     pub async fn is_active(&self) -> bool {
         matches!(*self.status.read().await, RoomStatus::Active(_))
-    }
-    pub async fn connection_count(&self) -> usize {
-        if let RoomStatus::Active(count) = *self.status.read().await {
-            count
-        } else {
-            0
-        }
     }
     pub async fn increment_connection(&self) {
         let mut status = self.status.write().await;
